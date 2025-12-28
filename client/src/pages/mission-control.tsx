@@ -5,11 +5,14 @@ import { AmbientBackground } from "@/components/ui/ambient-background";
 import bgTexture from "@assets/generated_images/subtle_dark_digital_noise_texture_with_faint_grid_overlay.png";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getActiveWorkflow, getWorkflows, advanceWorkflow } from "@/lib/api";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, List } from "lucide-react";
 import { motion } from "framer-motion";
+import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
 
 export default function MissionControl() {
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   
   const { data: activeWorkflow, isLoading } = useQuery({
     queryKey: ["activeWorkflow"],
@@ -84,14 +87,28 @@ export default function MissionControl() {
             />
             System Online
           </div>
-          <motion.div 
-            className="text-xs font-mono text-muted-foreground"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
-            LIVING WORKFLOW v1.0
-          </motion.div>
+          
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/workflows")}
+              className="text-white/50 hover:text-white hover:bg-white/5"
+              data-testid="button-all-missions"
+            >
+              <List className="w-4 h-4 mr-2" />
+              All Missions
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => navigate("/workflows/new")}
+              className="bg-primary/20 hover:bg-primary/30 text-primary"
+              data-testid="button-new-mission"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New
+            </Button>
+          </div>
         </motion.header>
 
         <main className="flex-1 grid lg:grid-cols-12 gap-12 lg:gap-8 items-start">
@@ -145,14 +162,27 @@ export default function MissionControl() {
                 progress={(activeWorkflow.currentStep / activeWorkflow.totalSteps) * 100}
                 totalSteps={activeWorkflow.totalSteps}
                 currentStep={activeWorkflow.currentStep}
+                workflowId={activeWorkflow.id}
                 onContinue={handleContinue}
                 isLoading={advanceMutation.isPending}
               />
             ) : (
-              <div className="text-center text-muted-foreground max-w-md">
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center text-muted-foreground max-w-md bg-white/5 border border-white/10 p-8"
+              >
                 <p className="text-lg mb-4">No active quest detected.</p>
-                <p className="text-sm">Create a new workflow to begin your mission.</p>
-              </div>
+                <p className="text-sm mb-6">Create a new workflow to begin your mission.</p>
+                <Button
+                  onClick={() => navigate("/workflows/new")}
+                  className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider"
+                  data-testid="button-create-first-mission"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Initialize First Mission
+                </Button>
+              </motion.div>
             )}
             
             {/* Mobile Momentum Ticker */}

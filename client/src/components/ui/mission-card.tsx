@@ -3,6 +3,7 @@ import { ArrowRight, Lock, Target, Zap, CheckCircle2, Loader2 } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState } from "react";
+import { useLocation } from "wouter";
 
 interface MissionCardProps {
   questName: string;
@@ -10,6 +11,7 @@ interface MissionCardProps {
   progress: number;
   totalSteps: number;
   currentStep: number;
+  workflowId?: number;
   onContinue?: () => void;
   isLoading?: boolean;
 }
@@ -20,14 +22,18 @@ export function MissionCard({
   progress = 35,
   totalSteps = 8,
   currentStep = 3,
+  workflowId,
   onContinue,
   isLoading = false,
 }: MissionCardProps) {
+  const [, navigate] = useLocation();
   const [showSuccess, setShowSuccess] = useState(false);
   const isComplete = currentStep >= totalSteps;
 
   const handleContinue = () => {
-    if (onContinue && !isComplete) {
+    if (workflowId) {
+      navigate(`/workflow/${workflowId}`);
+    } else if (onContinue && !isComplete) {
       setShowSuccess(true);
       onContinue();
       setTimeout(() => setShowSuccess(false), 800);
