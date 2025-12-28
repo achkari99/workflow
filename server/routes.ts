@@ -1,8 +1,12 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertWorkflowSchema, insertStepSchema, insertApprovalSchema, insertIntelDocSchema } from "@shared/schema";
+import { insertWorkflowSchema, insertStepSchema, insertApprovalSchema, insertIntelDocSchema, insertWorkflowShareSchema, insertCompositeWorkflowSchema } from "@shared/schema";
 import { fromError } from "zod-validation-error";
+
+function getUserId(req: Request): string | undefined {
+  return (req as any).user?.claims?.sub;
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -11,7 +15,8 @@ export async function registerRoutes(
   
   app.get("/api/workflows", async (req, res) => {
     try {
-      const workflows = await storage.getWorkflows();
+      const userId = getUserId(req);
+      const workflows = await storage.getWorkflows(userId);
       res.json(workflows);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch workflows" });
@@ -20,7 +25,8 @@ export async function registerRoutes(
 
   app.get("/api/workflows/active", async (req, res) => {
     try {
-      const workflow = await storage.getActiveWorkflow();
+      const userId = getUserId(req);
+      const workflow = await storage.getActiveWorkflow(userId);
       if (!workflow) {
         return res.status(404).json({ error: "No active workflow found" });
       }
@@ -45,7 +51,8 @@ export async function registerRoutes(
 
   app.post("/api/workflows", async (req, res) => {
     try {
-      const validation = insertWorkflowSchema.safeParse(req.body);
+      const userId = getUserId(req);
+      const validation = insertWorkflowSchema.safeParse({ ...req.body, ownerId: userId });
       if (!validation.success) {
         return res.status(400).json({ error: fromError(validation.error).toString() });
       }
@@ -76,10 +83,15 @@ export async function registerRoutes(
   app.patch("/api/workflows/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const workflow = await storage.updateWorkflow(id, req.body);
-      if (!workflow) {
+      const userId = getUserId(req);
+      const existing = await storage.getWorkflow(id);
+      if (!existing) {
         return res.status(404).json({ error: "Workflow not found" });
       }
+      if (existing.ownerId && existing.ownerId !== userId) {
+        return res.status(403).json({ error: "You can only edit workflows you own" });
+      }
+      const workflow = await storage.updateWorkflow(id, req.body);
       res.json(workflow);
     } catch (error) {
       res.status(500).json({ error: "Failed to update workflow" });
@@ -89,6 +101,14 @@ export async function registerRoutes(
   app.delete("/api/workflows/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = getUserId(req);
+      const existing = await storage.getWorkflow(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Workflow not found" });
+      }
+      if (existing.ownerId && existing.ownerId !== userId) {
+        return res.status(403).json({ error: "You can only delete workflows you own" });
+      }
       await storage.deleteWorkflow(id);
       res.json({ success: true });
     } catch (error) {
@@ -99,7 +119,8 @@ export async function registerRoutes(
   app.post("/api/workflows/:id/set-active", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      await storage.setActiveWorkflow(id);
+      const userId = getUserId(req);
+      await storage.setActiveWorkflow(id, userId);
       const workflow = await storage.getWorkflow(id);
       res.json(workflow);
     } catch (error) {
@@ -110,10 +131,19 @@ export async function registerRoutes(
   app.post("/api/workflows/:id/advance", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const workflow = await storage.advanceWorkflowStep(id);
-      if (!workflow) {
+      const userId = getUserId(req);
+      const existing = await storage.getWorkflow(id);
+      if (!existing) {
         return res.status(404).json({ error: "Workflow not found" });
       }
+      if (existing.ownerId && existing.ownerId !== userId) {
+        const shares = await storage.getWorkflowShares(id);
+        const hasEditAccess = shares.some(s => s.sharedWithUserId === userId && s.permission === "edit");
+        if (!hasEditAccess) {
+          return res.status(403).json({ error: "You don't have permission to advance this workflow" });
+        }
+      }
+      const workflow = await storage.advanceWorkflowStep(id);
       res.json(workflow);
     } catch (error) {
       res.status(500).json({ error: "Failed to advance workflow" });
@@ -260,6 +290,161 @@ export async function registerRoutes(
       res.json(approval);
     } catch (error) {
       res.status(500).json({ error: "Failed to update approval" });
+    }
+  });
+
+  app.get("/api/workflows/:id/shares", async (req, res) => {
+    try {
+      const workflowId = parseInt(req.params.id);
+      const shares = await storage.getWorkflowShares(workflowId);
+      res.json(shares);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch shares" });
+    }
+  });
+
+  app.post("/api/workflows/:id/share", async (req, res) => {
+    try {
+      const workflowId = parseInt(req.params.id);
+      const currentUserId = getUserId(req);
+      const workflow = await storage.getWorkflow(workflowId);
+      if (!workflow) {
+        return res.status(404).json({ error: "Workflow not found" });
+      }
+      if (workflow.ownerId && workflow.ownerId !== currentUserId) {
+        return res.status(403).json({ error: "You can only share workflows you own" });
+      }
+      const validation = insertWorkflowShareSchema.safeParse({
+        workflowId,
+        sharedWithUserId: req.body.userId,
+        permission: req.body.permission || "view",
+      });
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+      const share = await storage.shareWorkflow(validation.data);
+      res.status(201).json(share);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to share workflow" });
+    }
+  });
+
+  app.delete("/api/shares/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = getUserId(req);
+      const share = await storage.getShare(id);
+      if (!share) {
+        return res.status(404).json({ error: "Share not found" });
+      }
+      const workflow = await storage.getWorkflow(share.workflowId);
+      if (workflow?.ownerId && workflow.ownerId !== userId) {
+        return res.status(403).json({ error: "You can only remove shares from workflows you own" });
+      }
+      await storage.removeShare(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove share" });
+    }
+  });
+
+  app.get("/api/users/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.length < 2) {
+        return res.json([]);
+      }
+      const users = await storage.searchUsers(query);
+      res.json(users);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to search users" });
+    }
+  });
+
+  app.get("/api/composites", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const composites = await storage.getCompositeWorkflows(userId);
+      res.json(composites);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch composite workflows" });
+    }
+  });
+
+  app.get("/api/composites/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const composite = await storage.getCompositeWorkflowWithItems(id);
+      if (!composite) {
+        return res.status(404).json({ error: "Composite workflow not found" });
+      }
+      res.json(composite);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch composite workflow" });
+    }
+  });
+
+  app.post("/api/composites", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { name, description, workflowIds = [] } = req.body;
+      
+      const validation = insertCompositeWorkflowSchema.safeParse({
+        name,
+        description,
+        ownerId: userId,
+      });
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+      
+      const composite = await storage.createCompositeWorkflow(validation.data);
+
+      for (let i = 0; i < workflowIds.length; i++) {
+        await storage.addWorkflowToComposite({
+          compositeId: composite.id,
+          workflowId: workflowIds[i],
+          orderIndex: i,
+        });
+      }
+
+      res.status(201).json(composite);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create composite workflow" });
+    }
+  });
+
+  app.post("/api/composites/:id/workflows", async (req, res) => {
+    try {
+      const compositeId = parseInt(req.params.id);
+      const { workflowId, orderIndex = 0 } = req.body;
+      
+      const item = await storage.addWorkflowToComposite({
+        compositeId,
+        workflowId,
+        orderIndex,
+      });
+      res.status(201).json(item);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add workflow to composite" });
+    }
+  });
+
+  app.delete("/api/composites/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = getUserId(req);
+      const composite = await storage.getCompositeWorkflowWithItems(id);
+      if (!composite) {
+        return res.status(404).json({ error: "Composite workflow not found" });
+      }
+      if (composite.ownerId && composite.ownerId !== userId) {
+        return res.status(403).json({ error: "You can only delete composite workflows you own" });
+      }
+      await storage.deleteCompositeWorkflow(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete composite workflow" });
     }
   });
 

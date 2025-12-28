@@ -5,14 +5,16 @@ import { AmbientBackground } from "@/components/ui/ambient-background";
 import bgTexture from "@assets/generated_images/subtle_dark_digital_noise_texture_with_faint_grid_overlay.png";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getActiveWorkflow, getWorkflows, advanceWorkflow } from "@/lib/api";
-import { Loader2, Plus, List } from "lucide-react";
+import { Loader2, Plus, List, Layers, LogIn, LogOut, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function MissionControl() {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
+  const { user, isAuthenticated, login, logout } = useAuth();
   
   const { data: activeWorkflow, isLoading } = useQuery({
     queryKey: ["activeWorkflow"],
@@ -92,6 +94,16 @@ export default function MissionControl() {
             <Button
               variant="ghost"
               size="sm"
+              onClick={() => navigate("/composites")}
+              className="text-white/50 hover:text-white hover:bg-white/5"
+              data-testid="button-composites"
+            >
+              <Layers className="w-4 h-4 mr-2" />
+              Composites
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => navigate("/workflows")}
               className="text-white/50 hover:text-white hover:bg-white/5"
               data-testid="button-all-missions"
@@ -108,6 +120,35 @@ export default function MissionControl() {
               <Plus className="w-4 h-4 mr-2" />
               New
             </Button>
+            
+            {isAuthenticated ? (
+              <div className="flex items-center gap-2 ml-2 pl-2 border-l border-white/10">
+                <div className="flex items-center gap-2 text-sm text-white/60">
+                  <User className="w-4 h-4" />
+                  <span>{user?.firstName || user?.email || "User"}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => logout()}
+                  className="text-white/50 hover:text-white hover:bg-white/5"
+                  data-testid="button-logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={login}
+                className="text-white/50 hover:text-white hover:bg-white/5 ml-2 pl-2 border-l border-white/10"
+                data-testid="button-login"
+              >
+                <LogIn className="w-4 h-4 mr-2" />
+                Log In
+              </Button>
+            )}
           </div>
         </motion.header>
 

@@ -1,4 +1,4 @@
-import type { Workflow, InsertWorkflow, Step, IntelDoc, Activity, WorkflowWithSteps, StepWithDetails } from "@shared/schema";
+import type { Workflow, InsertWorkflow, Step, IntelDoc, Activity, WorkflowWithSteps, StepWithDetails, WorkflowShare, CompositeWorkflow, CompositeWorkflowWithItems } from "@shared/schema";
 
 export async function getActiveWorkflow(): Promise<Workflow | null> {
   const res = await fetch("/api/workflows/active");
@@ -117,4 +117,58 @@ export async function addIntelDoc(stepId: number, doc: { title: string; content:
   });
   if (!res.ok) throw new Error("Failed to add intel doc");
   return res.json();
+}
+
+export async function getWorkflowShares(workflowId: number): Promise<WorkflowShare[]> {
+  const res = await fetch(`/api/workflows/${workflowId}/shares`);
+  if (!res.ok) throw new Error("Failed to fetch shares");
+  return res.json();
+}
+
+export async function shareWorkflow(workflowId: number, userId: string, permission: string = "view"): Promise<WorkflowShare> {
+  const res = await fetch(`/api/workflows/${workflowId}/share`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, permission }),
+  });
+  if (!res.ok) throw new Error("Failed to share workflow");
+  return res.json();
+}
+
+export async function removeShare(shareId: number): Promise<void> {
+  const res = await fetch(`/api/shares/${shareId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to remove share");
+}
+
+export async function searchUsers(query: string): Promise<{ id: string; email: string | null; firstName: string | null; lastName: string | null }[]> {
+  const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error("Failed to search users");
+  return res.json();
+}
+
+export async function getComposites(): Promise<CompositeWorkflow[]> {
+  const res = await fetch("/api/composites");
+  if (!res.ok) throw new Error("Failed to fetch composites");
+  return res.json();
+}
+
+export async function getComposite(id: number): Promise<CompositeWorkflowWithItems> {
+  const res = await fetch(`/api/composites/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch composite");
+  return res.json();
+}
+
+export async function createComposite(name: string, description: string, workflowIds: number[]): Promise<CompositeWorkflow> {
+  const res = await fetch("/api/composites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, description, workflowIds }),
+  });
+  if (!res.ok) throw new Error("Failed to create composite");
+  return res.json();
+}
+
+export async function deleteComposite(id: number): Promise<void> {
+  const res = await fetch(`/api/composites/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete composite");
 }

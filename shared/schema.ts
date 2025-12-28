@@ -4,14 +4,12 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
+export * from "./models/auth";
+
 export const stepStatusEnum = ["locked", "active", "in_progress", "pending_approval", "completed"] as const;
 export const approvalStatusEnum = ["pending", "approved", "rejected", "changes_requested"] as const;
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-});
+import { users } from "./models/auth";
 
 export const workflows = pgTable("workflows", {
   id: serial("id").primaryKey(),
@@ -22,8 +20,33 @@ export const workflows = pgTable("workflows", {
   isActive: boolean("is_active").notNull().default(false),
   status: text("status").notNull().default("active"),
   priority: text("priority").notNull().default("high"),
+  ownerId: varchar("owner_id").references(() => users.id),
+  parentWorkflowId: integer("parent_workflow_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const workflowShares = pgTable("workflow_shares", {
+  id: serial("id").primaryKey(),
+  workflowId: integer("workflow_id").notNull().references(() => workflows.id, { onDelete: "cascade" }),
+  sharedWithUserId: varchar("shared_with_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  permission: text("permission").notNull().default("view"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const compositeWorkflows = pgTable("composite_workflows", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  ownerId: varchar("owner_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const compositeWorkflowItems = pgTable("composite_workflow_items", {
+  id: serial("id").primaryKey(),
+  compositeId: integer("composite_id").notNull().references(() => compositeWorkflows.id, { onDelete: "cascade" }),
+  workflowId: integer("workflow_id").notNull().references(() => workflows.id, { onDelete: "cascade" }),
+  orderIndex: integer("order_index").notNull().default(0),
 });
 
 export const steps = pgTable("steps", {
@@ -103,11 +126,6 @@ export const activityRelations = relations(activities, ({ one }) => ({
   }),
 }));
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
 export const insertWorkflowSchema = createInsertSchema(workflows).omit({
   id: true,
   createdAt: true,
@@ -136,8 +154,20 @@ export const insertActivitySchema = createInsertSchema(activities).omit({
   createdAt: true,
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export const insertWorkflowShareSchema = createInsertSchema(workflowShares).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCompositeWorkflowSchema = createInsertSchema(compositeWorkflows).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCompositeWorkflowItemSchema = createInsertSchema(compositeWorkflowItems).omit({
+  id: true,
+});
+
 export type InsertWorkflow = z.infer<typeof insertWorkflowSchema>;
 export type Workflow = typeof workflows.$inferSelect;
 export type InsertStep = z.infer<typeof insertStepSchema>;
@@ -148,6 +178,13 @@ export type InsertIntelDoc = z.infer<typeof insertIntelDocSchema>;
 export type IntelDoc = typeof intelDocs.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type Activity = typeof activities.$inferSelect;
+export type InsertWorkflowShare = z.infer<typeof insertWorkflowShareSchema>;
+export type WorkflowShare = typeof workflowShares.$inferSelect;
+export type InsertCompositeWorkflow = z.infer<typeof insertCompositeWorkflowSchema>;
+export type CompositeWorkflow = typeof compositeWorkflows.$inferSelect;
+export type InsertCompositeWorkflowItem = z.infer<typeof insertCompositeWorkflowItemSchema>;
+export type CompositeWorkflowItem = typeof compositeWorkflowItems.$inferSelect;
 
 export type WorkflowWithSteps = Workflow & { steps: Step[] };
 export type StepWithDetails = Step & { approvals: Approval[]; intelDocs: IntelDoc[] };
+export type CompositeWorkflowWithItems = CompositeWorkflow & { workflows: Workflow[] };

@@ -7,6 +7,8 @@ import MissionControl from "@/pages/mission-control";
 import WorkflowWorkspace from "@/pages/workflow-workspace";
 import WorkflowCreate from "@/pages/workflow-create";
 import WorkflowList from "@/pages/workflow-list";
+import IntelPage from "@/pages/intel";
+import CompositesPage from "@/pages/composites";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -16,6 +18,8 @@ function Router() {
       <Route path="/workflow/:id" component={WorkflowWorkspace} />
       <Route path="/workflows" component={WorkflowList} />
       <Route path="/workflows/new" component={WorkflowCreate} />
+      <Route path="/intel/:workflowId/:stepId?" component={IntelPage} />
+      <Route path="/composites" component={CompositesPage} />
       <Route component={NotFound} />
     </Switch>
   );
