@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Flame, Clock, Flag, Zap } from "lucide-react";
+import { Flame, Zap, Flag } from "lucide-react";
 
 export function MomentumTicker() {
   const items = [
@@ -15,10 +15,27 @@ export function MomentumTicker() {
           key={index}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 + index * 0.1 }}
-          className="flex items-center gap-2 bg-secondary/50 backdrop-blur-sm px-4 py-2 rounded border border-white/5 hover:border-white/10 transition-colors whitespace-nowrap"
+          transition={{ delay: 0.6 + index * 0.1, duration: 0.4 }}
+          whileHover={{ 
+            y: -2, 
+            borderColor: "rgba(255,255,255,0.2)",
+            transition: { duration: 0.2 }
+          }}
+          className="flex items-center gap-2 bg-secondary/50 backdrop-blur-sm px-4 py-2 rounded border border-white/5 transition-colors whitespace-nowrap cursor-default"
         >
-          <item.icon className={`w-4 h-4 ${item.color}`} />
+          <motion.div
+            animate={{ 
+              scale: [1, 1.15, 1],
+              opacity: [0.8, 1, 0.8],
+            }}
+            transition={{ 
+              duration: 2 + index * 0.5, 
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          >
+            <item.icon className={`w-4 h-4 ${item.color}`} />
+          </motion.div>
           <span className="text-sm font-mono font-medium text-secondary-foreground uppercase tracking-wide">
             {item.text}
           </span>

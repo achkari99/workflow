@@ -1,10 +1,12 @@
 import { HeroStatement } from "@/components/ui/hero-statement";
 import { MissionCard } from "@/components/ui/mission-card";
 import { MomentumTicker } from "@/components/ui/momentum-ticker";
+import { AmbientBackground } from "@/components/ui/ambient-background";
 import bgTexture from "@assets/generated_images/subtle_dark_digital_noise_texture_with_faint_grid_overlay.png";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getActiveWorkflow, getWorkflows, advanceWorkflow } from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function MissionControl() {
   const queryClient = useQueryClient();
@@ -45,6 +47,9 @@ export default function MissionControl() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-hidden relative selection:bg-primary/30 selection:text-primary-foreground">
+      {/* Ambient animated background */}
+      <AmbientBackground />
+      
       {/* Background Texture */}
       <div 
         className="fixed inset-0 opacity-20 pointer-events-none z-0 mix-blend-overlay"
@@ -62,15 +67,32 @@ export default function MissionControl() {
       <div className="relative z-10 container mx-auto px-4 py-8 md:py-12 lg:py-16 min-h-screen flex flex-col">
         
         {/* Top Header / Status Bar */}
-        <header className="flex justify-between items-center mb-12 md:mb-20 border-b border-white/5 pb-4">
+        <motion.header 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="flex justify-between items-center mb-12 md:mb-20 border-b border-white/5 pb-4"
+        >
           <div className="text-xs font-mono text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <motion.span 
+              className="w-2 h-2 rounded-full bg-green-500"
+              animate={{ 
+                scale: [1, 1.2, 1],
+                opacity: [0.7, 1, 0.7],
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
             System Online
           </div>
-          <div className="text-xs font-mono text-muted-foreground">
+          <motion.div 
+            className="text-xs font-mono text-muted-foreground"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
             LIVING WORKFLOW v1.0
-          </div>
-        </header>
+          </motion.div>
+        </motion.header>
 
         <main className="flex-1 grid lg:grid-cols-12 gap-12 lg:gap-8 items-start">
           {/* Left Column - Statement */}
@@ -84,17 +106,33 @@ export default function MissionControl() {
             
             {/* Secondary Missions (Desktop) */}
             {secondaryWorkflows.length > 0 && (
-              <div className="mt-auto pt-12 hidden lg:block opacity-60 hover:opacity-100 transition-opacity">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.6 }}
+                transition={{ delay: 1 }}
+                whileHover={{ opacity: 1 }}
+                className="mt-auto pt-12 hidden lg:block"
+              >
                 <h3 className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-4">Secondary Objectives</h3>
                 <ul className="space-y-3">
-                  {secondaryWorkflows.slice(0, 3).map((workflow) => (
-                    <li key={workflow.id} className="flex items-center gap-3 text-sm group cursor-pointer">
-                      <span className="w-1.5 h-1.5 bg-white/20 rotate-45 group-hover:bg-primary transition-colors" />
+                  {secondaryWorkflows.slice(0, 3).map((workflow, i) => (
+                    <motion.li 
+                      key={workflow.id} 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 1.1 + i * 0.1 }}
+                      whileHover={{ x: 4 }}
+                      className="flex items-center gap-3 text-sm group cursor-pointer"
+                    >
+                      <motion.span 
+                        className="w-1.5 h-1.5 bg-white/20 rotate-45 group-hover:bg-primary transition-colors"
+                        whileHover={{ scale: 1.3 }}
+                      />
                       <span className="text-muted-foreground group-hover:text-white transition-colors">{workflow.name}</span>
-                    </li>
+                    </motion.li>
                   ))}
                 </ul>
-              </div>
+              </motion.div>
             )}
           </div>
 

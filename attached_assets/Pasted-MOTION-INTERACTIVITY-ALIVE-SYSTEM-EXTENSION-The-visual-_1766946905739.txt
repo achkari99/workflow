@@ -1,0 +1,188 @@
+MOTION, INTERACTIVITY & “ALIVE SYSTEM” EXTENSION
+
+The visual identity is approved.
+Your next responsibility is to make the app feel ALIVE through motion, interaction, and feedback.
+
+This is NOT about flashy animations.
+This is about creating a living system that reacts, breathes, and responds.
+
+---
+
+CORE MOTION PHILOSOPHY (NON-NEGOTIABLE)
+
+Motion must:
+- reinforce meaning
+- guide attention
+- signal state changes
+- create emotional feedback
+
+Motion must NOT:
+- distract
+- slow down work
+- feel decorative or random
+
+Think:
+- system feedback
+- momentum
+- responsiveness
+
+---
+
+GLOBAL MOTION RULES
+
+- Use smooth easing (ease-out, cubic-bezier)
+- Prefer short, confident animations (200–400ms)
+- Motion density should be HIGH but SUBTLE
+- Nothing should feel static or dead
+
+---
+
+1️⃣ HOME / MISSION SCREEN MOTION
+
+Hero Text (“BUILD. VALIDATE. SHIP.”):
+- Animate in on first load:
+  - slight upward movement
+  - opacity fade
+- Each word can have a staggered entrance (very subtle)
+
+Active Quest Card:
+- On hover:
+  - gentle lift
+  - soft glow around edges
+- On focus:
+  - pulsing outline or ambient glow
+- Progress bar:
+  - animate smoothly when progress changes
+  - never jump instantly
+
+“CONTINUE MISSION →” button:
+- Idle state:
+  - subtle breathing animation (slow, low opacity pulse)
+- Hover:
+  - arrow slides slightly right
+  - background glow intensifies
+- Click:
+  - quick compression + release
+  - transition into workflow view (not a hard cut)
+
+---
+
+2️⃣ SCREEN TRANSITIONS (VERY IMPORTANT)
+
+Between:
+- Home → Workflow
+- Step → Step
+
+Use:
+- smooth slide + fade
+- depth illusion (foreground moves faster than background)
+
+The transition should feel like:
+“Entering a deeper layer of the mission.”
+
+NO hard page reloads.
+NO abrupt swaps.
+
+---
+
+3️⃣ WORKFLOW / STEP VIEW MOTION
+
+Journey Path (Left):
+- Current step:
+  - soft pulsing indicator
+  - slight glow
+- Completed step:
+  - satisfying check animation
+- Locked step:
+  - subtle shake or lock pulse when clicked (feedback, not error)
+
+Center Workspace:
+- Step title:
+  - animate in when step changes
+- Action sections:
+  - staggered entrance
+- Verification box:
+  - expands / collapses smoothly
+
+Right Intel Panel:
+- Slides in/out
+- Never pops instantly
+
+---
+
+4️⃣ INTERACTION FEEDBACK (THIS MAKES IT FEEL “ALIVE”)
+
+Every user action must trigger feedback:
+
+- Submitting data:
+  - loading state with motion (not spinner-only)
+  - confirmation animation on success
+- Client approval:
+  - calm celebratory animation (glow, wave, subtle particles)
+  - NEVER confetti
+- Rejection / change request:
+  - gentle warning motion
+  - empathetic copy
+
+No action should feel ignored.
+
+---
+
+5️⃣ AMBIENT LIFE (SUBTLE, BACKGROUND)
+
+Add low-frequency ambient motion:
+- soft moving gradients
+- faint animated noise
+- slow rotating / pulsing background elements
+
+These should be:
+- barely noticeable
+- felt more than seen
+
+This prevents the UI from feeling frozen.
+
+---
+
+6️⃣ SOUND (OPTIONAL, VERY LIGHT)
+If implemented:
+- extremely subtle UI sounds
+- soft confirmation clicks
+- easy to disable
+
+Sound must never be required.
+
+---
+
+7️⃣ PERFORMANCE CONSTRAINTS (IMPORTANT)
+
+- Animations must remain smooth on mid-range devices
+- Prefer CSS + lightweight JS
+- Avoid heavy animation libraries unless necessary
+- No blocking animations
+
+The app must feel fast and responsive.
+
+---
+
+SUCCESS CRITERIA FOR MOTION
+
+The user should subconsciously feel:
+- “This app reacts to me”
+- “I’m in a system that’s running”
+- “Progress feels satisfying”
+
+If motion is noticeable as “animation”, it’s too much.
+If the UI feels static, it’s not enough.
+
+---
+
+FINAL INSTRUCTION
+
+Extend the existing mission-based UI with rich motion, interactivity, and feedback.
+Preserve clarity.
+Preserve focus.
+Add life.
+
+Do NOT redesign.
+Do NOT simplify.
+Animate with intention.
