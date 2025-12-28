@@ -10,6 +10,8 @@ interface MissionCardProps {
   progress: number;
   totalSteps: number;
   currentStep: number;
+  onContinue?: () => void;
+  isLoading?: boolean;
 }
 
 export function MissionCard({
@@ -18,6 +20,8 @@ export function MissionCard({
   progress = 35,
   totalSteps = 8,
   currentStep = 3,
+  onContinue,
+  isLoading = false,
 }: MissionCardProps) {
   return (
     <motion.div
@@ -84,11 +88,14 @@ export function MissionCard({
           <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-white/5">
             <Button 
               size="lg" 
-              className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-[1.02] transition-all font-display font-bold text-lg h-14 uppercase tracking-wide group/btn relative overflow-hidden"
+              onClick={onContinue}
+              disabled={isLoading || currentStep >= totalSteps}
+              data-testid="button-continue-mission"
+              className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-[1.02] transition-all font-display font-bold text-lg h-14 uppercase tracking-wide group/btn relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-500 ease-in-out skew-x-12" />
               <span className="relative flex items-center gap-2">
-                Continue Mission <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
+                {currentStep >= totalSteps ? "Quest Complete" : "Continue Mission"} <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
               </span>
             </Button>
             
