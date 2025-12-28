@@ -1,0 +1,183 @@
+ROLE & MINDSET
+You are a world-class product designer + creative front-end engineer.
+You are NOT building a generic SaaS dashboard.
+You are designing a bold, opinionated, energetic product interface that feels like a MISSION, a QUEST, a JOURNEY.
+
+This app is used EVERY DAY.
+If it feels boring, neutral, or corporate, it has FAILED.
+
+Your job is to create a UI that feels:
+- alive
+- bold
+- confident
+- motivating
+- slightly gamified
+- visually striking
+while still being usable and structured.
+
+Think LESS “dashboard”.
+Think MORE “control room”, “active quest”, “mission in progress”.
+
+---
+
+PRODUCT CONTEXT
+The product is called **Living Workflow**.
+
+It is a guided workflow system with strict steps, but the structure should feel invisible.
+Users should feel like they are PLAYING a serious game of building real things.
+
+This is a personal tool first, SaaS later.
+Taste matters more than completeness.
+
+---
+
+CRITICAL DESIGN REFERENCE (IMPORTANT)
+Take inspiration from bold products like:
+- NeoLearn (bold typography, contrast, identity)
+- Game-like progression systems
+- Mission / quest interfaces
+
+DO NOT copy layouts.
+DO copy ENERGY, CONFIDENCE, and PRESENCE.
+
+---
+
+WHAT TO BUILD (VERY SPECIFIC)
+
+### 1️⃣ REMOVE THE TRADITIONAL DASHBOARD
+Do NOT create:
+- “Dashboard”
+- “Overview of workflows”
+- Generic cards in a grid
+
+Those are banned.
+
+---
+
+### 2️⃣ BUILD A **HOME / MISSION SCREEN**
+This is the first screen users see.
+
+It must include:
+
+#### 🔥 A BOLD HERO STATEMENT (TOP-LEFT OR CENTER)
+Examples (choose one or create a better one):
+- “MOVE THE WORK FORWARD.”
+- “BUILD. VALIDATE. SHIP.”
+- “ONE STEP CLOSER.”
+
+This should be BIG typography.
+This is the emotional anchor.
+
+---
+
+#### 🎯 ACTIVE QUEST (MAIN CENTERPIECE)
+Instead of a list, show ONE main thing:
+
+**Active Quest Card**
+- Workflow name
+- Current step (e.g. “Step 3 — Lock the Scope”)
+- Visual progress indicator (8 dots, path, or bar)
+- Big CTA:
+  → “Continue the mission →”
+
+This card should feel IMPORTANT.
+Larger than anything else.
+Visually dominant.
+
+---
+
+#### ⚡ MOMENTUM SIGNALS (SMALL BUT POWERFUL)
+Add subtle game-like signals:
+- “🔥 3-day build streak”
+- “⚡ Waiting on client”
+- “🏁 3 steps to delivery”
+
+These should feel motivating, not childish.
+
+---
+
+#### 🧩 SECONDARY WORK (QUIET)
+Other workflows can exist, but:
+- smaller
+- less contrast
+- secondary placement
+
+They must NOT compete with the Active Quest.
+
+---
+
+### 3️⃣ VISUAL STYLE RULES (NON-NEGOTIABLE)
+
+- Strong contrast zones (light + dark areas)
+- Bold typography hierarchy
+- Asymmetry (avoid perfect grids)
+- Floating elements / overlapping layers
+- No “safe SaaS” look
+
+Color:
+- High contrast base (white / near-white + dark accents)
+- ONE strong accent color (electric blue, neon green, or coral)
+- Use accent sparingly but confidently
+
+---
+
+### 4️⃣ LANGUAGE & COPY (VERY IMPORTANT)
+
+Ban corporate language.
+
+DO NOT use:
+- “Dashboard”
+- “Overview”
+- “Submit”
+- “Task completed”
+
+Use language like:
+- “Continue the mission”
+- “Quest complete”
+- “Next move”
+- “Locked in”
+- “In progress”
+
+The app should feel like it TALKS to you.
+
+---
+
+### 5️⃣ MOTION & LIFE
+Add:
+- entrance animations
+- subtle hover motion
+- satisfying transitions
+
+Motion should add ENERGY, not decoration.
+
+---
+
+### 6️⃣ TECH CONSTRAINTS
+- React
+- Tailwind
+- No generic UI kits
+- Mock data is fine
+- Focus ONLY on:
+  - Home / Mission screen
+  - Visual identity
+  - Layout
+  - Typography
+  - Interaction feel
+
+---
+
+SUCCESS CRITERIA
+When finished, the UI should make the user think:
+“This feels bold.”
+“This feels different.”
+“I want to click continue.”
+
+If it feels like a normal SaaS app, you FAILED.
+
+---
+
+DELIVERABLE
+A visually striking Home / Mission screen that replaces the dashboard entirely and establishes the identity of Living Workflow.
+
+DO NOT IMPLEMENT FULL WORKFLOW LOGIC YET.
+DESIGN COMES FIRST.
