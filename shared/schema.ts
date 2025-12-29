@@ -45,13 +45,74 @@ export const compositeWorkflows = pgTable("composite_workflows", {
 export const compositeWorkflowItems = pgTable("composite_workflow_items", {
   id: serial("id").primaryKey(),
   compositeId: integer("composite_id").notNull().references(() => compositeWorkflows.id, { onDelete: "cascade" }),
-  workflowId: integer("workflow_id").notNull().references(() => workflows.id, { onDelete: "cascade" }),
+  stepId: integer("step_id").notNull().references(() => steps.id, { onDelete: "cascade" }),
   orderIndex: integer("order_index").notNull().default(0),
+});
+
+export const compositeWorkflowSessions = pgTable("composite_workflow_sessions", {
+  id: serial("id").primaryKey(),
+  compositeId: integer("composite_id").notNull().references(() => compositeWorkflows.id, { onDelete: "cascade" }),
+  ownerId: varchar("owner_id").references(() => users.id),
+  name: text("name"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const compositeWorkflowSessionMembers = pgTable("composite_workflow_session_members", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => compositeWorkflowSessions.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  canEditSteps: boolean("can_edit_steps").notNull().default(false),
+  canManageAssignments: boolean("can_manage_assignments").notNull().default(false),
+  canManageSharing: boolean("can_manage_sharing").notNull().default(false),
+  canEditIntel: boolean("can_edit_intel").notNull().default(false),
+  allowLaneDelegation: boolean("allow_lane_delegation").notNull().default(false),
+  laneColor: text("lane_color").notNull().default("#84cc16"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const compositeWorkflowSessionSteps = pgTable("composite_workflow_session_steps", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => compositeWorkflowSessions.id, { onDelete: "cascade" }),
+  stepId: integer("step_id").notNull().references(() => steps.id, { onDelete: "cascade" }),
+  isCompleted: boolean("is_completed").notNull().default(false),
+  completedAt: timestamp("completed_at"),
+});
+
+export const compositeWorkflowSessionAssignments = pgTable("composite_workflow_session_assignments", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => compositeWorkflowSessions.id, { onDelete: "cascade" }),
+  stepId: integer("step_id").notNull().references(() => steps.id, { onDelete: "cascade" }),
+  assigneeUserId: varchar("assignee_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  allowDelegation: boolean("allow_delegation").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const compositeWorkflowSessionIntelDocs = pgTable("composite_workflow_session_intel_docs", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => compositeWorkflowSessions.id, { onDelete: "cascade" }),
+  stepId: integer("step_id").notNull().references(() => steps.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  docType: text("doc_type").notNull().default("note"),
+  filePath: text("file_path"),
+  fileName: text("file_name"),
+  mimeType: text("mime_type"),
+  fileSize: integer("file_size"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const compositeWorkflowCopies = pgTable("composite_workflow_copies", {
+  id: serial("id").primaryKey(),
+  sourceCompositeId: integer("source_composite_id").notNull().references(() => compositeWorkflows.id, { onDelete: "cascade" }),
+  copiedCompositeId: integer("copied_composite_id").notNull().references(() => compositeWorkflows.id, { onDelete: "cascade" }),
+  ownerId: varchar("owner_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const steps = pgTable("steps", {
   id: serial("id").primaryKey(),
-  workflowId: integer("workflow_id").notNull().references(() => workflows.id, { onDelete: "cascade" }),
+  workflowId: integer("workflow_id").references(() => workflows.id, { onDelete: "cascade" }),
+  compositeId: integer("composite_id").references(() => compositeWorkflows.id, { onDelete: "cascade" }),
   stepNumber: integer("step_number").notNull(),
   name: text("name").notNull(),
   description: text("description"),
@@ -79,6 +140,10 @@ export const intelDocs = pgTable("intel_docs", {
   title: text("title").notNull(),
   content: text("content").notNull(),
   docType: text("doc_type").notNull().default("note"),
+  filePath: text("file_path"),
+  fileName: text("file_name"),
+  mimeType: text("mime_type"),
+  fileSize: integer("file_size"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -168,6 +233,36 @@ export const insertCompositeWorkflowItemSchema = createInsertSchema(compositeWor
   id: true,
 });
 
+export const insertCompositeWorkflowSessionSchema = createInsertSchema(compositeWorkflowSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCompositeWorkflowSessionMemberSchema = createInsertSchema(compositeWorkflowSessionMembers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCompositeWorkflowSessionStepSchema = createInsertSchema(compositeWorkflowSessionSteps).omit({
+  id: true,
+  completedAt: true,
+});
+
+export const insertCompositeWorkflowSessionAssignmentSchema = createInsertSchema(compositeWorkflowSessionAssignments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCompositeWorkflowSessionIntelDocSchema = createInsertSchema(compositeWorkflowSessionIntelDocs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCompositeWorkflowCopySchema = createInsertSchema(compositeWorkflowCopies).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertWorkflow = z.infer<typeof insertWorkflowSchema>;
 export type Workflow = typeof workflows.$inferSelect;
 export type InsertStep = z.infer<typeof insertStepSchema>;
@@ -184,7 +279,19 @@ export type InsertCompositeWorkflow = z.infer<typeof insertCompositeWorkflowSche
 export type CompositeWorkflow = typeof compositeWorkflows.$inferSelect;
 export type InsertCompositeWorkflowItem = z.infer<typeof insertCompositeWorkflowItemSchema>;
 export type CompositeWorkflowItem = typeof compositeWorkflowItems.$inferSelect;
+export type InsertCompositeWorkflowSession = z.infer<typeof insertCompositeWorkflowSessionSchema>;
+export type CompositeWorkflowSession = typeof compositeWorkflowSessions.$inferSelect;
+export type InsertCompositeWorkflowSessionMember = z.infer<typeof insertCompositeWorkflowSessionMemberSchema>;
+export type CompositeWorkflowSessionMember = typeof compositeWorkflowSessionMembers.$inferSelect;
+export type InsertCompositeWorkflowSessionStep = z.infer<typeof insertCompositeWorkflowSessionStepSchema>;
+export type CompositeWorkflowSessionStep = typeof compositeWorkflowSessionSteps.$inferSelect;
+export type InsertCompositeWorkflowSessionAssignment = z.infer<typeof insertCompositeWorkflowSessionAssignmentSchema>;
+export type CompositeWorkflowSessionAssignment = typeof compositeWorkflowSessionAssignments.$inferSelect;
+export type InsertCompositeWorkflowSessionIntelDoc = z.infer<typeof insertCompositeWorkflowSessionIntelDocSchema>;
+export type CompositeWorkflowSessionIntelDoc = typeof compositeWorkflowSessionIntelDocs.$inferSelect;
+export type InsertCompositeWorkflowCopy = z.infer<typeof insertCompositeWorkflowCopySchema>;
+export type CompositeWorkflowCopy = typeof compositeWorkflowCopies.$inferSelect;
 
 export type WorkflowWithSteps = Workflow & { steps: Step[] };
 export type StepWithDetails = Step & { approvals: Approval[]; intelDocs: IntelDoc[] };
-export type CompositeWorkflowWithItems = CompositeWorkflow & { workflows: Workflow[] };
+export type CompositeWorkflowWithItems = CompositeWorkflow & { steps: (Step & { workflowName: string })[] };

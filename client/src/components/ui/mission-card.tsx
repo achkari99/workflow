@@ -48,7 +48,7 @@ export function MissionCard({
       className="w-full max-w-2xl relative group"
     >
       {/* Ambient glow effect - breathing animation */}
-      <motion.div 
+      <motion.div
         className="absolute -inset-1 bg-gradient-to-r from-primary/50 to-purple-500/50 rounded-lg blur opacity-20"
         animate={{
           opacity: [0.15, 0.25, 0.15],
@@ -60,13 +60,13 @@ export function MissionCard({
           ease: "easeInOut",
         }}
       />
-      
+
       {/* Hover glow intensifier */}
       <div className="absolute -inset-1 bg-gradient-to-r from-primary/50 to-purple-500/50 rounded-lg blur opacity-0 group-hover:opacity-30 transition-opacity duration-500" />
-      
+
       <Card className="relative border-primary/30 bg-card/90 backdrop-blur-sm overflow-hidden clip-corner-tr border-l-4 border-l-primary group-hover:border-l-primary/80 transition-colors duration-300">
         {/* Background icon with subtle rotation */}
-        <motion.div 
+        <motion.div
           className="absolute top-0 right-0 p-4 opacity-[0.07] pointer-events-none"
           animate={{ rotate: [0, 3, -3, 0] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
@@ -75,15 +75,15 @@ export function MissionCard({
         </motion.div>
 
         <CardHeader className="pb-2">
-          <motion.div 
+          <motion.div
             className="flex items-center gap-2 mb-2"
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <motion.span 
+            <motion.span
               className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono uppercase tracking-wider border border-primary/20"
-              animate={{ 
+              animate={{
                 boxShadow: ["0 0 0px hsla(190, 100%, 50%, 0)", "0 0 8px hsla(190, 100%, 50%, 0.3)", "0 0 0px hsla(190, 100%, 50%, 0)"]
               }}
               transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
@@ -100,7 +100,7 @@ export function MissionCard({
               High Priority
             </span>
           </motion.div>
-          
+
           <CardTitle className="text-4xl md:text-5xl font-display font-bold uppercase tracking-tight text-white leading-none">
             <AnimatePresence mode="wait">
               <motion.span
@@ -122,7 +122,7 @@ export function MissionCard({
               <div>
                 <p className="text-sm text-muted-foreground font-mono mb-1 uppercase tracking-widest">Current Objective</p>
                 <AnimatePresence mode="wait">
-                  <motion.h3 
+                  <motion.h3
                     key={stepName}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -134,7 +134,7 @@ export function MissionCard({
                   </motion.h3>
                 </AnimatePresence>
               </div>
-              <motion.div 
+              <motion.div
                 className="text-right font-mono text-xs text-muted-foreground"
                 key={currentStep}
                 initial={{ scale: 1.1, opacity: 0.5 }}
@@ -152,21 +152,20 @@ export function MissionCard({
                   <motion.div
                     key={i}
                     initial={{ scaleX: 0 }}
-                    animate={{ 
+                    animate={{
                       scaleX: 1,
-                      backgroundColor: i < currentStep 
-                        ? "hsl(190, 100%, 50%)" 
-                        : i === currentStep 
-                        ? "hsl(190, 100%, 50%)" 
-                        : "hsl(240, 10%, 16%)"
+                      backgroundColor: i < currentStep
+                        ? "hsl(190, 100%, 50%)"
+                        : i === currentStep
+                          ? "hsl(190, 100%, 50%)"
+                          : "hsl(240, 10%, 16%)"
                     }}
-                    transition={{ 
+                    transition={{
                       scaleX: { delay: 0.4 + i * 0.05, duration: 0.3 },
                       backgroundColor: { duration: 0.5 }
                     }}
-                    className={`h-full flex-1 rounded-sm origin-left ${
-                      i === currentStep ? "opacity-50" : ""
-                    }`}
+                    className={`h-full flex-1 rounded-sm origin-left ${i === currentStep ? "opacity-50" : ""
+                      }`}
                   >
                     {i === currentStep && (
                       <motion.div
@@ -193,22 +192,22 @@ export function MissionCard({
                 } : { opacity: 0 }}
                 transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
               />
-              
-              <Button 
-                size="lg" 
+
+              <Button
+                size="lg"
                 onClick={handleContinue}
                 disabled={isLoading || isComplete}
                 data-testid="button-continue-mission"
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90 transition-all font-display font-bold text-lg h-14 uppercase tracking-wide group/btn relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {/* Sweep effect on hover */}
-                <motion.div 
+                <motion.div
                   className="absolute inset-0 bg-white/20 skew-x-12"
                   initial={{ x: "-150%" }}
                   whileHover={{ x: "150%" }}
                   transition={{ duration: 0.5, ease: "easeInOut" }}
                 />
-                
+
                 {/* Button content with states */}
                 <span className="relative flex items-center justify-center gap-2">
                   <AnimatePresence mode="wait">
@@ -264,14 +263,15 @@ export function MissionCard({
                 </span>
               </Button>
             </motion.div>
-            
-            <Button 
-              variant="outline" 
+
+            <Button
+              variant="outline"
               size="lg"
+              onClick={() => workflowId && navigate(`/intel/${workflowId}`)}
               data-testid="button-view-intel"
               className="flex-1 font-mono uppercase tracking-wider h-14 border-white/10 hover:bg-white/5 hover:text-white hover:border-white/20 transition-all duration-300"
             >
-              <Lock className="w-4 h-4 mr-2 text-muted-foreground" />
+              <ArrowRight className="w-4 h-4 mr-2 text-primary opacity-50" />
               View Intel
             </Button>
           </div>

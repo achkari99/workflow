@@ -1,18 +1,44 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
 import { storage } from "./storage";
-import { insertWorkflowSchema, insertStepSchema, insertApprovalSchema, insertIntelDocSchema, insertWorkflowShareSchema, insertCompositeWorkflowSchema } from "@shared/schema";
+import {
+  insertWorkflowSchema,
+  insertStepSchema,
+  insertApprovalSchema,
+  insertIntelDocSchema,
+  insertWorkflowShareSchema,
+  insertCompositeWorkflowSchema,
+  insertCompositeWorkflowSessionSchema,
+  insertCompositeWorkflowSessionMemberSchema,
+  insertCompositeWorkflowSessionAssignmentSchema,
+  insertCompositeWorkflowSessionIntelDocSchema,
+} from "@shared/schema";
 import { fromError } from "zod-validation-error";
+import { supabase } from "./supabase";
 
 function getUserId(req: Request): string | undefined {
-  return (req as any).user?.claims?.sub;
+  return (req.user as any)?.id;
+}
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
+
+async function attachSignedUrls(docs: any[]) {
+  return Promise.all(docs.map(async (doc) => {
+    if (!doc.filePath) return doc;
+    const { data } = await supabase.storage.from("intel-docs").createSignedUrl(doc.filePath, 60 * 60);
+    return { ...doc, fileUrl: data?.signedUrl || null };
+  }));
 }
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
+
   app.get("/api/workflows", async (req, res) => {
     try {
       const userId = getUserId(req);
@@ -57,23 +83,23 @@ export async function registerRoutes(
         return res.status(400).json({ error: fromError(validation.error).toString() });
       }
       const workflow = await storage.createWorkflow(validation.data);
-      
+
       for (let i = 1; i <= workflow.totalSteps; i++) {
         await storage.createStep({
           workflowId: workflow.id,
           stepNumber: i,
           name: `Step ${i}`,
-          description: `Complete step ${i}`,
+          description: `Complete phase ${i}`,
           status: i === 1 ? "active" : "locked",
         });
       }
-      
+
       await storage.createActivity({
         workflowId: workflow.id,
         action: "workflow_created",
         description: `Workflow "${workflow.name}" created`,
       });
-      
+
       res.status(201).json(workflow);
     } catch (error) {
       res.status(500).json({ error: "Failed to create workflow" });
@@ -143,7 +169,8 @@ export async function registerRoutes(
           return res.status(403).json({ error: "You don't have permission to advance this workflow" });
         }
       }
-      const workflow = await storage.advanceWorkflowStep(id);
+      const { stepId } = req.body;
+      const workflow = await storage.advanceWorkflowStep(id, stepId);
       res.json(workflow);
     } catch (error) {
       res.status(500).json({ error: "Failed to advance workflow" });
@@ -177,7 +204,8 @@ export async function registerRoutes(
       if (!step) {
         return res.status(404).json({ error: "Step not found" });
       }
-      res.json(step);
+      const intelDocsWithUrls = await attachSignedUrls(step.intelDocs);
+      res.json({ ...step, intelDocs: intelDocsWithUrls });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch step" });
     }
@@ -250,7 +278,8 @@ export async function registerRoutes(
     try {
       const stepId = parseInt(req.params.id);
       const docs = await storage.getIntelDocsByStep(stepId);
-      res.json(docs);
+      const docsWithUrls = await attachSignedUrls(docs);
+      res.json(docsWithUrls);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch intel docs" });
     }
@@ -267,6 +296,52 @@ export async function registerRoutes(
       res.status(201).json(doc);
     } catch (error) {
       res.status(500).json({ error: "Failed to create intel doc" });
+    }
+  });
+
+  app.post("/api/steps/:id/intel/upload", upload.single("file"), async (req, res) => {
+    try {
+      const stepId = parseInt(req.params.id);
+      const { title, docType } = req.body;
+      const file = req.file;
+      if (!title || !file) {
+        return res.status(400).json({ error: "Title and file are required" });
+      }
+
+      const userId = getUserId(req) || "anonymous";
+      const safeName = file.originalname.replace(/[^\w.\-]+/g, "_");
+      const objectPath = `${userId}/steps/${stepId}/${Date.now()}-${safeName}`;
+
+      const { data: uploadData, error } = await supabase.storage.from("intel-docs").upload(objectPath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
+
+      if (error) {
+        console.error("Supabase upload error:", error);
+        return res.status(500).json({ error: "Failed to upload file", details: error.message });
+      }
+
+      const validation = insertIntelDocSchema.safeParse({
+        stepId,
+        title,
+        content: `Attached file: ${file.originalname}`,
+        docType: docType || "note",
+        filePath: objectPath,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+      });
+
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+
+      const doc = await storage.createIntelDoc(validation.data);
+      const [docWithUrl] = await attachSignedUrls([doc]);
+      res.status(201).json(docWithUrl);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to upload intel doc" });
     }
   });
 
@@ -367,6 +442,7 @@ export async function registerRoutes(
       const composites = await storage.getCompositeWorkflows(userId);
       res.json(composites);
     } catch (error) {
+      console.error("Failed to fetch composite workflows:", error);
       res.status(500).json({ error: "Failed to fetch composite workflows" });
     }
   });
@@ -380,6 +456,7 @@ export async function registerRoutes(
       }
       res.json(composite);
     } catch (error) {
+      console.error("Failed to fetch composite workflow item:", error);
       res.status(500).json({ error: "Failed to fetch composite workflow" });
     }
   });
@@ -387,46 +464,209 @@ export async function registerRoutes(
   app.post("/api/composites", async (req, res) => {
     try {
       const userId = getUserId(req);
-      const { name, description, workflowIds = [] } = req.body;
-      
+      const { name, description, stepIds = [] } = req.body;
+
+      console.log("Creating composite mission:", { name, stepIds });
+
       const validation = insertCompositeWorkflowSchema.safeParse({
         name,
         description,
         ownerId: userId,
       });
       if (!validation.success) {
+        console.error("Validation failed:", validation.error);
         return res.status(400).json({ error: fromError(validation.error).toString() });
       }
-      
-      const composite = await storage.createCompositeWorkflow(validation.data);
 
-      for (let i = 0; i < workflowIds.length; i++) {
-        await storage.addWorkflowToComposite({
-          compositeId: composite.id,
-          workflowId: workflowIds[i],
-          orderIndex: i,
-        });
+      const composite = await storage.createCompositeWorkflow(validation.data);
+      console.log("Composite mission base created:", composite.id);
+
+      for (let i = 0; i < stepIds.length; i++) {
+        await storage.cloneStepToComposite(composite.id, stepIds[i], i);
       }
 
+      console.log("Steps successfully integrated into mission.");
       res.status(201).json(composite);
     } catch (error) {
+      console.error("Full stack trace for composite failure:", error);
       res.status(500).json({ error: "Failed to create composite workflow" });
     }
   });
 
-  app.post("/api/composites/:id/workflows", async (req, res) => {
+  app.post("/api/composites/:id/copy", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sourceId = parseInt(req.params.id);
+      const { name, description } = req.body || {};
+      const composite = await storage.cloneCompositeForUser(sourceId, userId, name, description);
+      res.status(201).json(composite);
+    } catch (error) {
+      console.error("Failed to copy composite workflow:", error);
+      res.status(500).json({ error: "Failed to copy composite workflow" });
+    }
+  });
+
+  app.post("/api/composites/:id/steps", async (req, res) => {
     try {
       const compositeId = parseInt(req.params.id);
-      const { workflowId, orderIndex = 0 } = req.body;
-      
-      const item = await storage.addWorkflowToComposite({
-        compositeId,
-        workflowId,
-        orderIndex,
-      });
+      const { stepId, orderIndex = 0 } = req.body;
+
+      const item = await storage.cloneStepToComposite(compositeId, stepId, orderIndex);
       res.status(201).json(item);
     } catch (error) {
-      res.status(500).json({ error: "Failed to add workflow to composite" });
+      res.status(500).json({ error: "Failed to add step to composite" });
+    }
+  });
+
+  app.post("/api/composite-sessions", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const validation = insertCompositeWorkflowSessionSchema.safeParse({
+        compositeId: req.body.compositeId,
+        ownerId: userId,
+        name: req.body.name,
+      });
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+
+      const session = await storage.createCompositeWorkflowSession(validation.data);
+      await storage.addCompositeWorkflowSessionMember({
+        sessionId: session.id,
+        userId,
+        canEditSteps: true,
+        canManageAssignments: true,
+        canManageSharing: true,
+        canEditIntel: true,
+        allowLaneDelegation: true,
+        laneColor: req.body.laneColor || "#84cc16",
+      });
+
+      res.status(201).json(session);
+    } catch (error) {
+      console.error("Failed to create composite session:", error);
+      res.status(500).json({ error: "Failed to create composite session" });
+    }
+  });
+
+  app.get("/api/composite-sessions/:id", async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      res.json(session);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch session" });
+    }
+  });
+
+  app.post("/api/composite-sessions/:id/members", async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const validation = insertCompositeWorkflowSessionMemberSchema.safeParse({
+        sessionId,
+        userId: req.body.userId,
+        canEditSteps: !!req.body.canEditSteps,
+        canManageAssignments: !!req.body.canManageAssignments,
+        canManageSharing: !!req.body.canManageSharing,
+        canEditIntel: !!req.body.canEditIntel,
+        allowLaneDelegation: !!req.body.allowLaneDelegation,
+        laneColor: req.body.laneColor || "#38bdf8",
+      });
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+      const member = await storage.addCompositeWorkflowSessionMember(validation.data);
+      res.status(201).json(member);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add session member" });
+    }
+  });
+
+  app.patch("/api/composite-sessions/:sessionId/members/:memberId", async (req, res) => {
+    try {
+      const memberId = parseInt(req.params.memberId);
+      const updated = await storage.updateCompositeWorkflowSessionMember(memberId, req.body);
+      if (!updated) {
+        return res.status(404).json({ error: "Member not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update session member" });
+    }
+  });
+
+  app.post("/api/composite-sessions/:id/assignments", async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const validation = insertCompositeWorkflowSessionAssignmentSchema.safeParse({
+        sessionId,
+        stepId: req.body.stepId,
+        assigneeUserId: req.body.assigneeUserId,
+        allowDelegation: !!req.body.allowDelegation,
+      });
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+      const assignment = await storage.assignCompositeWorkflowSessionStep(validation.data);
+      res.status(201).json(assignment);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to assign step" });
+    }
+  });
+
+  app.delete("/api/composite-sessions/:id/assignments/:assignmentId", async (req, res) => {
+    try {
+      const assignmentId = parseInt(req.params.assignmentId);
+      await storage.removeCompositeWorkflowSessionAssignment(assignmentId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove assignment" });
+    }
+  });
+
+  app.patch("/api/composite-sessions/:id/steps/:sessionStepId", async (req, res) => {
+    try {
+      const sessionStepId = parseInt(req.params.sessionStepId);
+      const updated = await storage.updateCompositeWorkflowSessionStep(sessionStepId, req.body);
+      if (!updated) {
+        return res.status(404).json({ error: "Session step not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update session step" });
+    }
+  });
+
+  app.post("/api/composite-sessions/:id/intel", async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const validation = insertCompositeWorkflowSessionIntelDocSchema.safeParse({
+        sessionId,
+        stepId: req.body.stepId,
+        title: req.body.title,
+        content: req.body.content,
+        docType: req.body.docType,
+        filePath: req.body.filePath,
+        fileName: req.body.fileName,
+        mimeType: req.body.mimeType,
+        fileSize: req.body.fileSize,
+      });
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+      const doc = await storage.addCompositeWorkflowSessionIntelDoc(validation.data);
+      res.status(201).json(doc);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add session intel doc" });
     }
   });
 
@@ -483,7 +723,7 @@ export async function registerRoutes(
           ...stepData1[i],
           isCompleted: stepData1[i].status === "completed",
         });
-        
+
         if (i === 2) {
           await storage.createIntelDoc({
             stepId: step.id,

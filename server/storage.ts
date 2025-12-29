@@ -1,5 +1,5 @@
-import { 
-  workflows, 
+import {
+  workflows,
   steps,
   approvals,
   intelDocs,
@@ -7,6 +7,12 @@ import {
   workflowShares,
   compositeWorkflows,
   compositeWorkflowItems,
+  compositeWorkflowSessions,
+  compositeWorkflowSessionMembers,
+  compositeWorkflowSessionSteps,
+  compositeWorkflowSessionAssignments,
+  compositeWorkflowSessionIntelDocs,
+  compositeWorkflowCopies,
   type Workflow,
   type InsertWorkflow,
   type Step,
@@ -26,10 +32,21 @@ import {
   type CompositeWorkflowItem,
   type InsertCompositeWorkflowItem,
   type CompositeWorkflowWithItems,
+  type CompositeWorkflowSession,
+  type CompositeWorkflowSessionMember,
+  type CompositeWorkflowSessionStep,
+  type CompositeWorkflowSessionAssignment,
+  type CompositeWorkflowSessionIntelDoc,
+  type CompositeWorkflowCopy,
+  type InsertCompositeWorkflowSession,
+  type InsertCompositeWorkflowSessionMember,
+  type InsertCompositeWorkflowSessionStep,
+  type InsertCompositeWorkflowSessionAssignment,
+  type InsertCompositeWorkflowSessionIntelDoc,
   users
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, or, and, ilike } from "drizzle-orm";
+import { eq, desc, asc, or, and, ilike, isNull } from "drizzle-orm";
 
 export interface IStorage {
   getWorkflows(userId?: string): Promise<Workflow[]>;
@@ -41,38 +58,53 @@ export interface IStorage {
   setActiveWorkflow(id: number, userId?: string): Promise<void>;
   advanceWorkflowStep(id: number): Promise<Workflow | undefined>;
   deleteWorkflow(id: number): Promise<boolean>;
-  
+
   getStepsByWorkflow(workflowId: number): Promise<Step[]>;
   getStep(id: number): Promise<Step | undefined>;
   getStepWithDetails(id: number): Promise<StepWithDetails | undefined>;
   createStep(step: InsertStep): Promise<Step>;
   updateStep(id: number, step: Partial<InsertStep>): Promise<Step | undefined>;
   completeStep(id: number): Promise<Step | undefined>;
-  
+
   getApprovalsByStep(stepId: number): Promise<Approval[]>;
   createApproval(approval: InsertApproval): Promise<Approval>;
   updateApproval(id: number, approval: Partial<InsertApproval>): Promise<Approval | undefined>;
-  
+
   getIntelDocsByStep(stepId: number): Promise<IntelDoc[]>;
   createIntelDoc(doc: InsertIntelDoc): Promise<IntelDoc>;
   deleteIntelDoc(id: number): Promise<boolean>;
-  
+
   getActivitiesByWorkflow(workflowId: number): Promise<Activity[]>;
   createActivity(activity: InsertActivity): Promise<Activity>;
-  
+
   getWorkflowShares(workflowId: number): Promise<WorkflowShare[]>;
   getShare(id: number): Promise<WorkflowShare | undefined>;
   shareWorkflow(share: InsertWorkflowShare): Promise<WorkflowShare>;
   removeShare(id: number): Promise<boolean>;
   getSharedWorkflows(userId: string): Promise<Workflow[]>;
-  
+
   searchUsers(query: string): Promise<{ id: string; email: string | null; firstName: string | null; lastName: string | null }[]>;
-  
-  getCompositeWorkflows(userId?: string): Promise<CompositeWorkflow[]>;
+
+  getCompositeWorkflows(userId?: string): Promise<CompositeWorkflowWithItems[]>;
   getCompositeWorkflowWithItems(id: number): Promise<CompositeWorkflowWithItems | undefined>;
+  getCompositeWorkflowSession(id: number): Promise<any>;
+  createCompositeWorkflowSession(session: InsertCompositeWorkflowSession): Promise<CompositeWorkflowSession>;
+  addCompositeWorkflowSessionMember(member: InsertCompositeWorkflowSessionMember): Promise<CompositeWorkflowSessionMember>;
+  updateCompositeWorkflowSessionMember(id: number, data: Partial<InsertCompositeWorkflowSessionMember>): Promise<CompositeWorkflowSessionMember | undefined>;
+  getCompositeWorkflowSessionMembers(sessionId: number): Promise<CompositeWorkflowSessionMember[]>;
+  assignCompositeWorkflowSessionStep(assignment: InsertCompositeWorkflowSessionAssignment): Promise<CompositeWorkflowSessionAssignment>;
+  removeCompositeWorkflowSessionAssignment(id: number): Promise<boolean>;
+  getCompositeWorkflowSessionAssignments(sessionId: number): Promise<CompositeWorkflowSessionAssignment[]>;
+  updateCompositeWorkflowSessionStep(id: number, data: Partial<InsertCompositeWorkflowSessionStep>): Promise<CompositeWorkflowSessionStep | undefined>;
+  getCompositeWorkflowSessionSteps(sessionId: number): Promise<CompositeWorkflowSessionStep[]>;
+  addCompositeWorkflowSessionIntelDoc(doc: InsertCompositeWorkflowSessionIntelDoc): Promise<CompositeWorkflowSessionIntelDoc>;
+  getCompositeWorkflowSessionIntelDocs(sessionId: number): Promise<CompositeWorkflowSessionIntelDoc[]>;
+
   createCompositeWorkflow(composite: InsertCompositeWorkflow): Promise<CompositeWorkflow>;
-  addWorkflowToComposite(item: InsertCompositeWorkflowItem): Promise<CompositeWorkflowItem>;
-  removeWorkflowFromComposite(id: number): Promise<boolean>;
+  cloneCompositeForUser(sourceCompositeId: number, ownerId: string, name?: string, description?: string): Promise<CompositeWorkflow>;
+  cloneStepToComposite(compositeId: number, originalStepId: number, orderIndex: number): Promise<CompositeWorkflowItem>;
+  addStepToComposite(item: InsertCompositeWorkflowItem): Promise<CompositeWorkflowItem>;
+  removeStepFromComposite(id: number): Promise<boolean>;
   deleteCompositeWorkflow(id: number): Promise<boolean>;
 }
 
@@ -98,13 +130,13 @@ export class DatabaseStorage implements IStorage {
   async getWorkflowWithSteps(id: number): Promise<WorkflowWithSteps | undefined> {
     const workflow = await this.getWorkflow(id);
     if (!workflow) return undefined;
-    
+
     const workflowSteps = await db
       .select()
       .from(steps)
-      .where(eq(steps.workflowId, id))
-      .orderBy(asc(steps.stepNumber));
-    
+      .where(and(eq(steps.workflowId, id), isNull(steps.compositeId)))
+      .orderBy(asc(steps.id));
+
     return { ...workflow, steps: workflowSteps };
   }
 
@@ -140,35 +172,60 @@ export class DatabaseStorage implements IStorage {
     await db.update(workflows).set({ isActive: true }).where(eq(workflows.id, id));
   }
 
-  async advanceWorkflowStep(id: number): Promise<Workflow | undefined> {
+  async advanceWorkflowStep(id: number, stepId?: number): Promise<Workflow | undefined> {
     const workflow = await this.getWorkflow(id);
     if (!workflow) return undefined;
-    
+
+    console.log(`Advancing workflow ${id}. Current step: ${workflow.currentStep}/${workflow.totalSteps}`);
     const currentSteps = await this.getStepsByWorkflow(id);
-    const currentStep = currentSteps.find(s => s.stepNumber === workflow.currentStep);
-    if (currentStep) {
+    console.log(`Total steps found in DB: ${currentSteps.length}`);
+
+    // Safety check: Don't advance if already at or past the end
+    if (workflow.currentStep >= workflow.totalSteps) {
+      return workflow;
+    }
+
+    // Use the provided stepId as an anchor, or fall back to the global pointer
+    let currentIndex = workflow.currentStep - 1;
+    if (stepId) {
+      const foundIndex = currentSteps.findIndex(s => s.id === stepId);
+      if (foundIndex !== -1) currentIndex = foundIndex;
+    }
+
+    const currentStep = currentSteps[currentIndex];
+
+    if (currentStep && !currentStep.isCompleted) {
       await this.completeStep(currentStep.id);
     }
-    
-    const nextStep = Math.min(workflow.currentStep + 1, workflow.totalSteps);
+
+    // Only increment the head pointer if we are finishing the "current" task or one ahead
+    // This prevents skipping if the user manually completes an older task
+    const nextStepNumber = Math.min(currentIndex + 2, workflow.totalSteps);
+    const nextStepIndex = nextStepNumber - 1;
+
+    // Update workflow head pointer
     const [updated] = await db
       .update(workflows)
-      .set({ currentStep: nextStep, updatedAt: new Date() })
+      .set({
+        currentStep: nextStepNumber,
+        updatedAt: new Date()
+      })
       .where(eq(workflows.id, id))
       .returning();
-    
-    const nextStepRecord = currentSteps.find(s => s.stepNumber === nextStep);
-    if (nextStepRecord && nextStep <= workflow.totalSteps) {
+
+    // Unlock the next step in the sequence
+    const nextStepRecord = currentSteps[nextStepIndex];
+    if (nextStepRecord) {
       await this.updateStep(nextStepRecord.id, { status: "active" });
     }
-    
+
     await this.createActivity({
       workflowId: id,
       stepId: currentStep?.id,
       action: "step_advanced",
-      description: `Advanced to step ${nextStep}`,
+      description: `Advanced to phase ${nextStepNumber}`,
     });
-    
+
     return updated || undefined;
   }
 
@@ -181,8 +238,8 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(steps)
-      .where(eq(steps.workflowId, workflowId))
-      .orderBy(asc(steps.stepNumber));
+      .where(and(eq(steps.workflowId, workflowId), isNull(steps.compositeId)))
+      .orderBy(asc(steps.id));
   }
 
   async getStep(id: number): Promise<Step | undefined> {
@@ -193,10 +250,10 @@ export class DatabaseStorage implements IStorage {
   async getStepWithDetails(id: number): Promise<StepWithDetails | undefined> {
     const step = await this.getStep(id);
     if (!step) return undefined;
-    
+
     const stepApprovals = await this.getApprovalsByStep(id);
     const stepIntelDocs = await this.getIntelDocsByStep(id);
-    
+
     return { ...step, approvals: stepApprovals, intelDocs: stepIntelDocs };
   }
 
@@ -310,21 +367,73 @@ export class DatabaseStorage implements IStorage {
     }).from(users).where(ilike(users.email, `%${query}%`)).limit(10);
   }
 
-  async getCompositeWorkflows(userId?: string): Promise<CompositeWorkflow[]> {
+  async getCompositeWorkflows(userId?: string): Promise<CompositeWorkflowWithItems[]> {
+    let query = db.select().from(compositeWorkflows).$dynamic();
     if (userId) {
-      return await db.select().from(compositeWorkflows).where(eq(compositeWorkflows.ownerId, userId)).orderBy(desc(compositeWorkflows.createdAt));
+      query = query.where(eq(compositeWorkflows.ownerId, userId));
     }
-    return await db.select().from(compositeWorkflows).orderBy(desc(compositeWorkflows.createdAt));
+    const composites = await query.orderBy(desc(compositeWorkflows.createdAt));
+
+    return await Promise.all(composites.map(async (c) => {
+      const compositeItems = await db.select({
+        step: steps,
+        workflow: workflows
+      })
+        .from(compositeWorkflowItems)
+        .where(eq(compositeWorkflowItems.compositeId, c.id))
+        .innerJoin(steps, eq(compositeWorkflowItems.stepId, steps.id))
+        .leftJoin(workflows, eq(steps.workflowId, workflows.id))
+        .orderBy(asc(compositeWorkflowItems.orderIndex));
+
+      const remixedSteps = compositeItems.map(item => ({
+        ...item.step,
+        workflowName: item.workflow?.name || "Independent Phase"
+      }));
+
+      return { ...c, steps: remixedSteps };
+    }));
   }
 
   async getCompositeWorkflowWithItems(id: number): Promise<CompositeWorkflowWithItems | undefined> {
     const [composite] = await db.select().from(compositeWorkflows).where(eq(compositeWorkflows.id, id));
     if (!composite) return undefined;
 
-    const items = await db.select().from(compositeWorkflowItems).where(eq(compositeWorkflowItems.compositeId, id)).orderBy(asc(compositeWorkflowItems.orderIndex));
-    const itemWorkflows = await Promise.all(items.map(i => this.getWorkflow(i.workflowId)));
-    
-    return { ...composite, workflows: itemWorkflows.filter((w): w is Workflow => w !== undefined) };
+    const compositeItems = await db.select({
+      step: steps,
+      workflow: workflows
+    })
+      .from(compositeWorkflowItems)
+      .where(eq(compositeWorkflowItems.compositeId, id))
+      .innerJoin(steps, eq(compositeWorkflowItems.stepId, steps.id))
+      .leftJoin(workflows, eq(steps.workflowId, workflows.id))
+      .orderBy(asc(compositeWorkflowItems.orderIndex));
+
+    const remixedSteps = compositeItems.map(item => ({
+      ...item.step,
+      workflowName: item.workflow?.name || "Independent Phase"
+    }));
+
+    return { ...composite, steps: remixedSteps };
+  }
+
+  async getCompositeWorkflowSession(id: number) {
+    const [session] = await db.select().from(compositeWorkflowSessions).where(eq(compositeWorkflowSessions.id, id));
+    if (!session) return undefined;
+
+    const members = await db.select().from(compositeWorkflowSessionMembers).where(eq(compositeWorkflowSessionMembers.sessionId, id));
+    const assignments = await db.select().from(compositeWorkflowSessionAssignments).where(eq(compositeWorkflowSessionAssignments.sessionId, id));
+    const sessionSteps = await db.select().from(compositeWorkflowSessionSteps).where(eq(compositeWorkflowSessionSteps.sessionId, id));
+    const intelDocs = await db.select().from(compositeWorkflowSessionIntelDocs).where(eq(compositeWorkflowSessionIntelDocs.sessionId, id));
+    const composite = await this.getCompositeWorkflowWithItems(session.compositeId);
+
+    return {
+      ...session,
+      composite,
+      members,
+      assignments,
+      sessionSteps,
+      intelDocs,
+    };
   }
 
   async createCompositeWorkflow(composite: InsertCompositeWorkflow): Promise<CompositeWorkflow> {
@@ -332,12 +441,123 @@ export class DatabaseStorage implements IStorage {
     return newComposite;
   }
 
-  async addWorkflowToComposite(item: InsertCompositeWorkflowItem): Promise<CompositeWorkflowItem> {
+  async createCompositeWorkflowSession(session: InsertCompositeWorkflowSession): Promise<CompositeWorkflowSession> {
+    const [newSession] = await db.insert(compositeWorkflowSessions).values(session).returning();
+    return newSession;
+  }
+
+  async addCompositeWorkflowSessionMember(member: InsertCompositeWorkflowSessionMember): Promise<CompositeWorkflowSessionMember> {
+    const [newMember] = await db.insert(compositeWorkflowSessionMembers).values(member).returning();
+    return newMember;
+  }
+
+  async updateCompositeWorkflowSessionMember(id: number, data: Partial<InsertCompositeWorkflowSessionMember>): Promise<CompositeWorkflowSessionMember | undefined> {
+    const [updated] = await db.update(compositeWorkflowSessionMembers).set(data).where(eq(compositeWorkflowSessionMembers.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async getCompositeWorkflowSessionMembers(sessionId: number): Promise<CompositeWorkflowSessionMember[]> {
+    return await db.select().from(compositeWorkflowSessionMembers).where(eq(compositeWorkflowSessionMembers.sessionId, sessionId));
+  }
+
+  async assignCompositeWorkflowSessionStep(assignment: InsertCompositeWorkflowSessionAssignment): Promise<CompositeWorkflowSessionAssignment> {
+    const [created] = await db.insert(compositeWorkflowSessionAssignments).values(assignment).returning();
+    return created;
+  }
+
+  async removeCompositeWorkflowSessionAssignment(id: number): Promise<boolean> {
+    await db.delete(compositeWorkflowSessionAssignments).where(eq(compositeWorkflowSessionAssignments.id, id));
+    return true;
+  }
+
+  async getCompositeWorkflowSessionAssignments(sessionId: number): Promise<CompositeWorkflowSessionAssignment[]> {
+    return await db.select().from(compositeWorkflowSessionAssignments).where(eq(compositeWorkflowSessionAssignments.sessionId, sessionId));
+  }
+
+  async updateCompositeWorkflowSessionStep(id: number, data: Partial<InsertCompositeWorkflowSessionStep>): Promise<CompositeWorkflowSessionStep | undefined> {
+    const [updated] = await db.update(compositeWorkflowSessionSteps).set(data).where(eq(compositeWorkflowSessionSteps.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async getCompositeWorkflowSessionSteps(sessionId: number): Promise<CompositeWorkflowSessionStep[]> {
+    return await db.select().from(compositeWorkflowSessionSteps).where(eq(compositeWorkflowSessionSteps.sessionId, sessionId));
+  }
+
+  async addCompositeWorkflowSessionIntelDoc(doc: InsertCompositeWorkflowSessionIntelDoc): Promise<CompositeWorkflowSessionIntelDoc> {
+    const [created] = await db.insert(compositeWorkflowSessionIntelDocs).values(doc).returning();
+    return created;
+  }
+
+  async getCompositeWorkflowSessionIntelDocs(sessionId: number): Promise<CompositeWorkflowSessionIntelDoc[]> {
+    return await db.select().from(compositeWorkflowSessionIntelDocs).where(eq(compositeWorkflowSessionIntelDocs.sessionId, sessionId));
+  }
+
+  async cloneCompositeForUser(sourceCompositeId: number, ownerId: string, name?: string, description?: string): Promise<CompositeWorkflow> {
+    const source = await this.getCompositeWorkflowWithItems(sourceCompositeId);
+    if (!source) {
+      throw new Error("Composite workflow not found");
+    }
+
+    const [newComposite] = await db.insert(compositeWorkflows).values({
+      name: name || source.name,
+      description: description ?? source.description,
+      ownerId,
+    }).returning();
+
+    for (let i = 0; i < source.steps.length; i++) {
+      const step = source.steps[i];
+      await this.cloneStepToComposite(newComposite.id, step.id, i);
+    }
+
+    return newComposite;
+  }
+
+  async cloneStepToComposite(compositeId: number, originalStepId: number, orderIndex: number): Promise<CompositeWorkflowItem> {
+    const originalStep = await this.getStepWithDetails(originalStepId);
+    if (!originalStep) throw new Error("Template step not found");
+
+    // Create cloned step
+    const [clonedStep] = await db.insert(steps).values({
+      workflowId: originalStep.workflowId ?? null,
+      compositeId: compositeId,
+      stepNumber: originalStep.stepNumber,
+      name: originalStep.name,
+      description: originalStep.description,
+      objective: originalStep.objective,
+      instructions: originalStep.instructions,
+      status: orderIndex === 0 ? "active" : "locked",
+      requiresApproval: originalStep.requiresApproval,
+      isCompleted: false,
+    }).returning();
+
+    // Clone intel docs
+    if (originalStep.intelDocs.length > 0) {
+      for (const doc of originalStep.intelDocs) {
+        await this.createIntelDoc({
+          stepId: clonedStep.id,
+          title: doc.title,
+          content: doc.content,
+          docType: doc.docType,
+        });
+      }
+    }
+
+    // Link to composite
+    const [newItem] = await db.insert(compositeWorkflowItems).values({
+      compositeId,
+      stepId: clonedStep.id,
+      orderIndex,
+    }).returning();
+
+    return newItem;
+  }
+
+  async addStepToComposite(item: InsertCompositeWorkflowItem): Promise<CompositeWorkflowItem> {
     const [newItem] = await db.insert(compositeWorkflowItems).values(item).returning();
     return newItem;
   }
 
-  async removeWorkflowFromComposite(id: number): Promise<boolean> {
+  async removeStepFromComposite(id: number): Promise<boolean> {
     await db.delete(compositeWorkflowItems).where(eq(compositeWorkflowItems.id, id));
     return true;
   }

@@ -1,10 +1,10 @@
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getWorkflow, getStepIntel, addIntelDoc } from "@/lib/api";
+import { getWorkflow, getStep, getStepIntel, addIntelDoc, uploadIntelDoc, getComposite } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ChevronLeft, 
-  FileText, 
+import {
+  ChevronLeft,
+  FileText,
   Plus,
   Loader2,
   BookOpen,
@@ -14,8 +14,10 @@ import {
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useId } from "react";
 import type { IntelDoc, Step } from "@shared/schema";
+
+type IntelDocWithFile = IntelDoc & { fileUrl?: string | null };
 
 const docTypeIcons: Record<string, typeof FileText> = {
   note: StickyNote,
@@ -31,10 +33,28 @@ const docTypeColors: Record<string, string> = {
   code: "bg-green-500/20 text-green-400 border-green-500/30",
 };
 
-function IntelCard({ doc }: { doc: IntelDoc }) {
+function IntelCard({ doc }: { doc: IntelDocWithFile }) {
   const Icon = docTypeIcons[doc.docType] || FileText;
   const colorClass = docTypeColors[doc.docType] || docTypeColors.note;
-  
+  const hasImagePreview = !!doc.fileUrl && !!doc.mimeType && doc.mimeType.startsWith("image/");
+  const fileLabel =
+    doc.mimeType === "application/pdf"
+      ? "PDF"
+      : doc.mimeType === "application/msword" || doc.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ? "DOC"
+        : doc.mimeType === "application/vnd.ms-excel" || doc.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ? "XLS"
+          : doc.mimeType === "application/vnd.ms-powerpoint" || doc.mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            ? "PPT"
+            : doc.mimeType === "application/json"
+              ? "JSON"
+              : doc.mimeType === "application/rtf"
+                ? "RTF"
+                : doc.mimeType?.startsWith("text/")
+                  ? "TXT"
+                  : "FILE";
+  const fileSizeLabel = doc.fileSize ? `${Math.max(1, Math.round(doc.fileSize / 1024))} KB` : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -49,6 +69,33 @@ function IntelCard({ doc }: { doc: IntelDoc }) {
         <div className="flex-1">
           <h3 className="font-display text-lg text-white mb-2">{doc.title}</h3>
           <p className="text-white/60 text-sm leading-relaxed whitespace-pre-wrap">{doc.content}</p>
+          {hasImagePreview && (
+            <div className="mt-3 border border-white/10 bg-black/40 p-2">
+              <img
+                src={doc.fileUrl ?? undefined}
+                alt={doc.fileName || "Attachment preview"}
+                className="max-h-64 w-full object-contain"
+              />
+            </div>
+          )}
+          {!hasImagePreview && doc.fileUrl && (
+            <a
+              href={doc.fileUrl ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 flex items-center gap-3 border border-white/10 bg-emerald-900/30 px-4 py-3 text-white/80 hover:border-emerald-400/60"
+            >
+              <div className="flex h-8 w-8 items-center justify-center bg-red-600 text-[10px] font-bold text-white">
+                {fileLabel}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm text-white">{doc.fileName || "Attachment.pdf"}</p>
+                <p className="text-[11px] text-white/50">
+                  {fileLabel}{fileSizeLabel ? ` - ${fileSizeLabel}` : ""}
+                </p>
+              </div>
+            </a>
+          )}
           <div className="mt-4 flex items-center gap-3 text-xs text-white/30">
             <span className={`px-2 py-1 border ${colorClass}`}>{doc.docType}</span>
             <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
@@ -59,21 +106,28 @@ function IntelCard({ doc }: { doc: IntelDoc }) {
   );
 }
 
-function AddDocModal({ 
-  stepId, 
-  onClose, 
-  onSuccess 
-}: { 
-  stepId: number; 
-  onClose: () => void; 
+function AddDocModal({
+  stepId,
+  onClose,
+  onSuccess
+}: {
+  stepId: number;
+  onClose: () => void;
   onSuccess: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [docType, setDocType] = useState("note");
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputId = useId();
 
   const addMutation = useMutation({
-    mutationFn: () => addIntelDoc(stepId, { title, content, docType }),
+    mutationFn: () => {
+      if (file) {
+        return uploadIntelDoc(stepId, { title, docType, file });
+      }
+      return addIntelDoc(stepId, { title, content, docType });
+    },
     onSuccess: () => {
       onSuccess();
       onClose();
@@ -112,11 +166,10 @@ function AddDocModal({
                 <button
                   key={type}
                   onClick={() => setDocType(type)}
-                  className={`px-3 py-2 text-sm border transition-all ${
-                    docType === type 
-                      ? docTypeColors[type] 
-                      : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10"
-                  }`}
+                  className={`px-3 py-2 text-sm border transition-all ${docType === type
+                    ? docTypeColors[type]
+                    : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10"
+                    }`}
                   data-testid={`button-doctype-${type}`}
                 >
                   {type}
@@ -149,13 +202,38 @@ function AddDocModal({
               placeholder="Document content..."
               className="w-full bg-black/30 border border-white/10 px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[150px] resize-none"
               data-testid="input-doc-content"
+              disabled={!!file}
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-mono text-white/40 uppercase tracking-widest mb-2">
+              Attachment (optional)
+            </label>
+            <div className="flex items-center gap-3">
+              <label
+                htmlFor={fileInputId}
+                className="inline-flex items-center gap-2 border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70 hover:bg-white/10 cursor-pointer"
+              >
+                <Plus className="w-3 h-3" />
+                Upload File
+              </label>
+              <input
+                id={fileInputId}
+                type="file"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                className="hidden"
+              />
+              <span className="text-[11px] text-white/40 truncate">
+                {file ? file.name : "No file selected"}
+              </span>
+            </div>
           </div>
 
           <div className="flex gap-3 pt-4">
             <Button
               onClick={() => addMutation.mutate()}
-              disabled={!title || !content || addMutation.isPending}
+              disabled={!title || (!content && !file) || addMutation.isPending}
               className="flex-1 bg-primary hover:bg-primary/90 text-black font-mono uppercase"
               data-testid="button-save-doc"
             >
@@ -180,16 +258,32 @@ export default function IntelPage() {
   const params = useParams<{ workflowId: string; stepId?: string }>();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
-  const workflowId = parseInt(params.workflowId || "0");
-  const stepIdParam = params.stepId ? parseInt(params.stepId) : null;
-  
+  const workflowIdParam = Number(params.workflowId);
+  const workflowId = Number.isFinite(workflowIdParam) ? workflowIdParam : null;
+  const stepIdParam = params.stepId ? parseInt(params.stepId, 10) : null;
+
   const [selectedStepId, setSelectedStepId] = useState<number | null>(stepIdParam);
   const [showAddModal, setShowAddModal] = useState(false);
 
+  const { data: stepDetails } = useQuery({
+    queryKey: ["step", stepIdParam],
+    queryFn: () => getStep(stepIdParam!),
+    enabled: !!stepIdParam,
+  });
+
+  const compositeId = stepDetails?.compositeId ?? null;
+
+  const { data: composite, isLoading: compositeLoading } = useQuery({
+    queryKey: ["composite", compositeId],
+    queryFn: () => getComposite(compositeId!),
+    enabled: !!compositeId,
+  });
+
+  const resolvedWorkflowId = workflowId ?? stepDetails?.workflowId ?? null;
   const { data: workflow, isLoading: workflowLoading } = useQuery({
-    queryKey: ["workflow", workflowId],
-    queryFn: () => getWorkflow(workflowId),
-    enabled: !!workflowId,
+    queryKey: ["workflow", resolvedWorkflowId],
+    queryFn: () => getWorkflow(resolvedWorkflowId!),
+    enabled: !!resolvedWorkflowId && !compositeId,
   });
 
   const { data: intelDocs, isLoading: intelLoading } = useQuery({
@@ -198,7 +292,7 @@ export default function IntelPage() {
     enabled: !!selectedStepId,
   });
 
-  if (workflowLoading) {
+  if (workflowLoading || compositeLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -206,20 +300,23 @@ export default function IntelPage() {
     );
   }
 
+  const stepList = composite?.steps ?? workflow?.steps ?? [];
+  const intelTitle = composite?.name ?? workflow?.name ?? "Intel Center";
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="h-14 border-b border-white/5 bg-black/40 flex items-center justify-between px-4">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={() => navigate(`/workflow/${workflowId}`)}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => window.history.back()}
           className="text-white/60 hover:text-white"
           data-testid="button-back"
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
           Back to Workspace
         </Button>
-        
+
         {selectedStepId && (
           <Button
             onClick={() => setShowAddModal(true)}
@@ -244,7 +341,7 @@ export default function IntelPage() {
             </div>
             <div>
               <h1 className="font-display text-3xl text-white tracking-wide">Intel Center</h1>
-              <p className="text-white/40 mt-1">{workflow?.name}</p>
+              <p className="text-white/40 mt-1">{intelTitle}</p>
             </div>
           </div>
         </motion.div>
@@ -252,22 +349,21 @@ export default function IntelPage() {
         <div className="grid lg:grid-cols-4 gap-8">
           <div className="lg:col-span-1">
             <h2 className="text-xs font-mono text-white/40 uppercase tracking-widest mb-4">
-              Steps
+              Phases
             </h2>
             <div className="space-y-2">
-              {workflow?.steps.map((step) => (
+              {stepList.map((step) => (
                 <button
                   key={step.id}
                   onClick={() => setSelectedStepId(step.id)}
-                  className={`w-full text-left p-3 border transition-all ${
-                    selectedStepId === step.id
-                      ? "bg-primary/10 border-primary/50 text-white"
-                      : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10"
-                  }`}
+                  className={`w-full text-left p-3 border transition-all ${selectedStepId === step.id
+                    ? "bg-primary/10 border-primary/50 text-white"
+                    : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10"
+                    }`}
                   data-testid={`step-select-${step.id}`}
                 >
                   <span className="text-xs font-mono text-white/30 block mb-1">
-                    Step {step.stepNumber}
+                    Phase {step.stepNumber}
                   </span>
                   <span className="text-sm">{step.name}</span>
                 </button>

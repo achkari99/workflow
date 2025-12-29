@@ -1,14 +1,15 @@
 import { useParams, useLocation } from "wouter";
+import { useEffect, useState, useId } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getWorkflow, getStep, startStep, completeStep, advanceWorkflow, requestApproval, addIntelDoc } from "@/lib/api";
+import { getWorkflow, getStep, startStep, completeStep, advanceWorkflow, requestApproval, addIntelDoc, uploadIntelDoc } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ChevronLeft, 
-  Lock, 
-  CheckCircle2, 
-  Circle, 
-  Play, 
-  Clock, 
+import {
+  ChevronLeft,
+  Lock,
+  CheckCircle2,
+  Circle,
+  Play,
+  Clock,
   AlertCircle,
   FileText,
   Plus,
@@ -18,11 +19,13 @@ import {
   ArrowRight,
   Loader2,
   Shield,
-  Zap
+  Zap,
+  BookOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import type { Step, StepWithDetails } from "@shared/schema";
+import type { Step, StepWithDetails, IntelDoc } from "@shared/schema";
+
+type IntelDocWithFile = IntelDoc & { fileUrl?: string | null };
 
 const statusConfig: Record<string, { icon: typeof Lock; color: string; label: string; bg: string }> = {
   locked: { icon: Lock, color: "text-white/30", label: "Locked", bg: "bg-white/5" },
@@ -32,13 +35,13 @@ const statusConfig: Record<string, { icon: typeof Lock; color: string; label: st
   completed: { icon: CheckCircle2, color: "text-green-400", label: "Completed", bg: "bg-green-400/10" },
 };
 
-function JourneyPath({ 
-  steps, 
-  currentStepId, 
-  onSelectStep, 
-  workflowName 
-}: { 
-  steps: Step[]; 
+function JourneyPath({
+  steps,
+  currentStepId,
+  onSelectStep,
+  workflowName
+}: {
+  steps: Step[];
   currentStepId: number | null;
   onSelectStep: (step: Step) => void;
   workflowName: string;
@@ -49,18 +52,18 @@ function JourneyPath({
         <h2 className="font-display text-lg text-white/90 tracking-wide">{workflowName}</h2>
         <p className="text-xs text-white/40 mt-1 font-mono uppercase tracking-widest">Journey Path</p>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto p-4">
         <div className="relative">
           <div className="absolute left-[19px] top-4 bottom-4 w-px bg-gradient-to-b from-primary/50 via-white/10 to-white/5" />
-          
+
           <div className="space-y-2">
             {steps.map((step, index) => {
               const config = statusConfig[step.status] || statusConfig.locked;
               const Icon = config.icon;
               const isActive = step.id === currentStepId;
               const isClickable = step.status !== "locked";
-              
+
               return (
                 <motion.button
                   key={step.id}
@@ -79,10 +82,10 @@ function JourneyPath({
                   <div className={`relative z-10 p-1.5 rounded-none ${config.bg}`}>
                     <Icon className={`w-4 h-4 ${config.color}`} />
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-white/30">0{step.stepNumber}</span>
+                      <span className="text-[10px] font-mono text-white/30 uppercase">SEQ-0{index + 1}</span>
                       {step.requiresApproval && (
                         <Shield className="w-3 h-3 text-purple-400" />
                       )}
@@ -102,21 +105,23 @@ function JourneyPath({
   );
 }
 
-function ExecutionCenter({ 
-  step, 
+function ExecutionCenter({
+  step,
   workflowId,
   isLoading,
   onStartStep,
   onCompleteStep,
   onRequestApproval,
+  onNextStep,
   isActionPending
-}: { 
+}: {
   step: StepWithDetails | null;
   workflowId: number;
   isLoading: boolean;
   onStartStep: () => void;
   onCompleteStep: () => void;
   onRequestApproval: () => void;
+  onNextStep?: () => void;
   isActionPending: boolean;
 }) {
   if (isLoading) {
@@ -154,7 +159,7 @@ function ExecutionCenter({
               <h1 className="font-display text-2xl text-white tracking-wide">{step.name}</h1>
             </div>
           </div>
-          
+
           <div className={`px-3 py-1.5 ${config.bg} ${config.color} text-xs font-mono uppercase tracking-wider flex items-center gap-2`}>
             <Icon className="w-3 h-3" />
             {config.label}
@@ -164,7 +169,7 @@ function ExecutionCenter({
 
       <div className="flex-1 overflow-y-auto p-6">
         {step.description && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-8"
@@ -177,7 +182,7 @@ function ExecutionCenter({
         )}
 
         {step.objective && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -193,7 +198,7 @@ function ExecutionCenter({
         )}
 
         {step.instructions && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
@@ -229,7 +234,7 @@ function ExecutionCenter({
       <div className="p-6 border-t border-white/5 bg-black/20">
         <div className="flex gap-3">
           {step.status === "active" && (
-            <Button 
+            <Button
               onClick={onStartStep}
               disabled={isActionPending}
               className="flex-1 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider"
@@ -243,9 +248,9 @@ function ExecutionCenter({
               Begin Step
             </Button>
           )}
-          
+
           {step.status === "in_progress" && !step.requiresApproval && (
-            <Button 
+            <Button
               onClick={onCompleteStep}
               disabled={isActionPending}
               className="flex-1 bg-green-500 hover:bg-green-500/90 text-black font-mono uppercase tracking-wider"
@@ -259,9 +264,9 @@ function ExecutionCenter({
               Mark Complete
             </Button>
           )}
-          
+
           {step.status === "in_progress" && step.requiresApproval && (
-            <Button 
+            <Button
               onClick={onRequestApproval}
               disabled={isActionPending}
               className="flex-1 bg-purple-500 hover:bg-purple-500/90 text-white font-mono uppercase tracking-wider"
@@ -275,20 +280,31 @@ function ExecutionCenter({
               Request Approval
             </Button>
           )}
-          
+
           {step.status === "pending_approval" && (
             <div className="flex-1 bg-purple-500/10 border border-purple-500/30 p-4 text-center">
               <p className="text-purple-300 font-mono text-sm">Awaiting client approval...</p>
             </div>
           )}
-          
+
           {step.status === "completed" && (
-            <div className="flex-1 bg-green-500/10 border border-green-500/30 p-4 text-center flex items-center justify-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-green-400" />
-              <p className="text-green-300 font-mono text-sm">Step Completed</p>
+            <div className="flex-1 space-y-3">
+              <div className="bg-green-500/10 border border-green-500/30 p-4 text-center flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-400" />
+                <p className="text-green-300 font-mono text-sm">Step Completed</p>
+              </div>
+              {onNextStep && (
+                <Button
+                  onClick={onNextStep}
+                  className="w-full h-12 bg-white/5 hover:bg-white/10 text-white border border-white/10 font-mono text-[10px] uppercase tracking-[0.2em]"
+                >
+                  Advance to Next Phase
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              )}
             </div>
           )}
-          
+
           {step.status === "locked" && (
             <div className="flex-1 bg-white/5 border border-white/10 p-4 text-center flex items-center justify-center gap-2">
               <Lock className="w-4 h-4 text-white/30" />
@@ -305,15 +321,23 @@ function IntelPanel({ step }: { step: StepWithDetails | null }) {
   const [isAddingDoc, setIsAddingDoc] = useState(false);
   const [newDocTitle, setNewDocTitle] = useState("");
   const [newDocContent, setNewDocContent] = useState("");
+  const [newDocFile, setNewDocFile] = useState<File | null>(null);
+  const fileInputId = useId();
   const queryClient = useQueryClient();
 
   const addDocMutation = useMutation({
-    mutationFn: () => addIntelDoc(step!.id, { title: newDocTitle, content: newDocContent, docType: "note" }),
+    mutationFn: () => {
+      if (newDocFile) {
+        return uploadIntelDoc(step!.id, { title: newDocTitle, docType: "note", file: newDocFile });
+      }
+      return addIntelDoc(step!.id, { title: newDocTitle, content: newDocContent, docType: "note" });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["step", step?.id] });
       setIsAddingDoc(false);
       setNewDocTitle("");
       setNewDocContent("");
+      setNewDocFile(null);
     },
   });
 
@@ -338,15 +362,26 @@ function IntelPanel({ step }: { step: StepWithDetails | null }) {
           <h2 className="font-display text-lg text-white/90 tracking-wide">Intel</h2>
           <p className="text-xs text-white/40 mt-1 font-mono uppercase tracking-widest">Step {step.stepNumber} Resources</p>
         </div>
-        <Button 
-          size="sm" 
-          variant="ghost" 
-          onClick={() => setIsAddingDoc(true)}
-          className="text-primary hover:bg-primary/10"
-          data-testid="button-add-intel"
-        >
-          <Plus className="w-4 h-4" />
-        </Button>
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => window.location.href = `/intel/${step.workflowId}/${step.id}`}
+            className="text-white/40 hover:text-primary transition-colors"
+            title="Open Full Center"
+          >
+            <BookOpen className="w-4 h-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsAddingDoc(true)}
+            className="text-primary hover:bg-primary/10"
+            data-testid="button-add-intel"
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -372,20 +407,39 @@ function IntelPanel({ step }: { step: StepWithDetails | null }) {
                 onChange={(e) => setNewDocContent(e.target.value)}
                 className="w-full bg-black/30 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[100px] resize-none"
                 data-testid="input-intel-content"
+                disabled={!!newDocFile}
               />
+              <div className="flex items-center gap-3">
+                <label
+                  htmlFor={fileInputId}
+                  className="inline-flex items-center gap-2 border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70 hover:bg-white/10 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  Upload File
+                </label>
+                <input
+                  id={fileInputId}
+                  type="file"
+                  onChange={(e) => setNewDocFile(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+                <span className="text-[11px] text-white/40 truncate">
+                  {newDocFile ? newDocFile.name : "No file selected"}
+                </span>
+              </div>
               <div className="flex gap-2">
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   onClick={() => addDocMutation.mutate()}
-                  disabled={!newDocTitle || !newDocContent || addDocMutation.isPending}
+                  disabled={!newDocTitle || (!newDocContent && !newDocFile) || addDocMutation.isPending}
                   className="bg-primary text-black"
                   data-testid="button-save-intel"
                 >
                   Save
                 </Button>
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
+                <Button
+                  size="sm"
+                  variant="ghost"
                   onClick={() => setIsAddingDoc(false)}
                   data-testid="button-cancel-intel"
                 >
@@ -400,7 +454,7 @@ function IntelPanel({ step }: { step: StepWithDetails | null }) {
           <div className="text-center py-8">
             <FileText className="w-8 h-8 text-white/10 mx-auto mb-3" />
             <p className="text-white/30 text-sm">No intel documents yet</p>
-            <button 
+            <button
               onClick={() => setIsAddingDoc(true)}
               className="text-primary text-sm mt-2 hover:underline"
             >
@@ -408,30 +462,96 @@ function IntelPanel({ step }: { step: StepWithDetails | null }) {
             </button>
           </div>
         ) : (
-          step.intelDocs.map((doc, index) => (
-            <motion.div
-              key={doc.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="bg-white/5 border border-white/10 p-4"
-              data-testid={`intel-doc-${doc.id}`}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <FileText className="w-4 h-4 text-primary" />
-                <h4 className="text-sm font-medium text-white">{doc.title}</h4>
-              </div>
-              <p className="text-sm text-white/60">{doc.content}</p>
-              <p className="text-xs text-white/30 mt-2 font-mono">{doc.docType}</p>
-            </motion.div>
-          ))
+          (step.intelDocs as IntelDocWithFile[]).map((doc, index) => {
+            const hasImagePreview = !!doc.fileUrl && !!doc.mimeType && doc.mimeType.startsWith("image/");
+            const fallbackNameMatch = doc.content?.startsWith("Attached file: ") ? doc.content.replace("Attached file: ", "") : null;
+            const displayFileName = doc.fileName || fallbackNameMatch;
+            const extension = displayFileName?.split(".").pop()?.toLowerCase();
+            const fileLabel =
+              doc.mimeType === "application/pdf"
+                ? "PDF"
+                : doc.mimeType === "application/msword" || doc.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  ? "DOC"
+                  : doc.mimeType === "application/vnd.ms-excel" || doc.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    ? "XLS"
+                    : doc.mimeType === "application/vnd.ms-powerpoint" || doc.mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      ? "PPT"
+                      : doc.mimeType === "application/json"
+                        ? "JSON"
+                        : doc.mimeType === "application/rtf"
+                          ? "RTF"
+                          : doc.mimeType?.startsWith("text/")
+                            ? "TXT"
+                            : extension && ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "json", "rtf", "txt"].includes(extension)
+                              ? extension.toUpperCase()
+                              : "FILE";
+            const fileSizeLabel = doc.fileSize ? `${Math.max(1, Math.round(doc.fileSize / 1024))} KB` : null;
+            return (
+              <motion.div
+                key={doc.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="bg-white/5 border border-white/10 p-4"
+                data-testid={`intel-doc-${doc.id}`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <h4 className="text-sm font-medium text-white">{doc.title}</h4>
+                </div>
+                <p className="text-sm text-white/60">{doc.content}</p>
+                {hasImagePreview && (
+                  <div className="mt-2 border border-white/10 bg-black/40 p-2">
+                    <img
+                      src={doc.fileUrl ?? undefined}
+                      alt={doc.fileName || "Attachment preview"}
+                      className="max-h-40 w-full object-contain"
+                    />
+                  </div>
+                )}
+              {!hasImagePreview && (doc.fileUrl || displayFileName) && (
+                doc.fileUrl ? (
+                  <a
+                    href={doc.fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 flex items-center gap-3 border border-white/10 bg-emerald-900/30 px-3 py-2 text-white/80 hover:border-emerald-400/60"
+                  >
+                    <div className="flex h-7 w-7 items-center justify-center bg-red-600 text-[9px] font-bold text-white">
+                      {fileLabel}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs text-white">{displayFileName || "Attachment"}</p>
+                      <p className="text-[10px] text-white/50">
+                        {fileLabel}{fileSizeLabel ? ` - ${fileSizeLabel}` : ""}
+                      </p>
+                    </div>
+                  </a>
+                ) : (
+                  <div className="mt-2 flex items-center gap-3 border border-white/10 bg-emerald-900/30 px-3 py-2 text-white/60">
+                    <div className="flex h-7 w-7 items-center justify-center bg-red-600 text-[9px] font-bold text-white">
+                      {fileLabel}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs text-white">{displayFileName || "Attachment"}</p>
+                      <p className="text-[10px] text-white/50">
+                        {fileLabel}{fileSizeLabel ? ` - ${fileSizeLabel}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                )
+              )}
+                <p className="text-xs text-white/30 mt-2 font-mono">{doc.docType}</p>
+              </motion.div>
+            )
+          })
         )}
 
         {step.approvals.length > 0 && (
           <div className="mt-6">
             <h3 className="text-xs font-mono text-white/40 uppercase tracking-widest mb-3">Approval History</h3>
             {step.approvals.map((approval) => (
-              <div 
+              <div
                 key={approval.id}
                 className="bg-purple-500/10 border border-purple-500/20 p-3 mb-2"
                 data-testid={`approval-${approval.id}`}
@@ -471,6 +591,18 @@ export default function WorkflowWorkspace() {
     enabled: !!selectedStepId,
   });
 
+  // Auto-select current active step or first step
+  useEffect(() => {
+    if (workflow && !selectedStepId) {
+      const currentStep = workflow.steps.find(s => s.status === "active" || s.status === "in_progress") ||
+        workflow.steps.find(s => !s.isCompleted) ||
+        workflow.steps[0];
+      if (currentStep) {
+        setSelectedStepId(currentStep.id);
+      }
+    }
+  }, [workflow, selectedStepId]);
+
   const startMutation = useMutation({
     mutationFn: () => startStep(selectedStepId!),
     onSuccess: () => {
@@ -481,8 +613,9 @@ export default function WorkflowWorkspace() {
 
   const completeMutation = useMutation({
     mutationFn: async () => {
-      await completeStep(selectedStepId!);
-      await advanceWorkflow(workflowId);
+      const stepId = selectedStepId!;
+      await completeStep(stepId);
+      await advanceWorkflow(workflowId, stepId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["step", selectedStepId] });
@@ -521,9 +654,9 @@ export default function WorkflowWorkspace() {
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <p className="text-white/60">Workflow not found</p>
-          <Button 
-            variant="ghost" 
-            onClick={() => navigate("/")} 
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/")}
             className="mt-4 text-primary"
           >
             Return to Mission Control
@@ -536,9 +669,9 @@ export default function WorkflowWorkspace() {
   return (
     <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
       <header className="h-14 border-b border-white/5 bg-black/40 flex items-center px-4 shrink-0">
-        <Button 
-          variant="ghost" 
-          size="sm" 
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => navigate("/")}
           className="text-white/60 hover:text-white mr-4"
           data-testid="button-back"
@@ -546,53 +679,60 @@ export default function WorkflowWorkspace() {
           <ChevronLeft className="w-4 h-4 mr-1" />
           Mission Control
         </Button>
-        
+
         <div className="flex-1 flex items-center justify-center gap-3">
-          <motion.span 
+          <motion.span
             className="w-2 h-2 rounded-full bg-green-500"
             animate={{ scale: [1, 1.2, 1], opacity: [0.7, 1, 0.7] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
           <span className="font-mono text-xs text-white/40 uppercase tracking-widest">Active Session</span>
         </div>
-        
+
         <div className="text-xs font-mono text-white/40">
           Step {workflow.currentStep} of {workflow.totalSteps}
         </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <motion.div 
+        <motion.div
           initial={{ x: -50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           className="w-72 shrink-0"
         >
-          <JourneyPath 
-            steps={workflow.steps} 
+          <JourneyPath
+            steps={workflow.steps}
             currentStepId={selectedStepId}
             onSelectStep={handleSelectStep}
             workflowName={workflow.name}
           />
         </motion.div>
 
-        <motion.div 
+        <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1 }}
           className="flex-1 bg-gradient-to-br from-black/20 to-black/40"
         >
-          <ExecutionCenter 
+          <ExecutionCenter
             step={stepDetails || null}
             workflowId={workflowId}
             isLoading={stepLoading}
             onStartStep={() => startMutation.mutate()}
             onCompleteStep={() => completeMutation.mutate()}
             onRequestApproval={() => approvalMutation.mutate()}
+            onNextStep={(() => {
+              const currentIndex = workflow.steps.findIndex(s => s.id === selectedStepId);
+              if (currentIndex !== -1 && currentIndex < workflow.steps.length - 1) {
+                return () => setSelectedStepId(workflow.steps[currentIndex + 1].id);
+              }
+              return undefined;
+            })()}
             isActionPending={startMutation.isPending || completeMutation.isPending || approvalMutation.isPending}
           />
         </motion.div>
 
-        <motion.div 
+        <motion.div
           initial={{ x: 50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}

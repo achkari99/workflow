@@ -21,8 +21,12 @@ export async function getWorkflow(id: number): Promise<WorkflowWithSteps> {
   return res.json();
 }
 
-export async function advanceWorkflow(id: number): Promise<Workflow> {
-  const res = await fetch(`/api/workflows/${id}/advance`, { method: "POST" });
+export async function advanceWorkflow(id: number, stepId?: number): Promise<Workflow> {
+  const res = await fetch(`/api/workflows/${id}/advance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stepId }),
+  });
   if (!res.ok) throw new Error("Failed to advance workflow");
   return res.json();
 }
@@ -119,6 +123,20 @@ export async function addIntelDoc(stepId: number, doc: { title: string; content:
   return res.json();
 }
 
+export async function uploadIntelDoc(stepId: number, data: { title: string; docType: string; file: File }): Promise<IntelDoc> {
+  const form = new FormData();
+  form.append("title", data.title);
+  form.append("docType", data.docType);
+  form.append("file", data.file);
+
+  const res = await fetch(`/api/steps/${stepId}/intel/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error("Failed to upload intel doc");
+  return res.json();
+}
+
 export async function getWorkflowShares(workflowId: number): Promise<WorkflowShare[]> {
   const res = await fetch(`/api/workflows/${workflowId}/shares`);
   if (!res.ok) throw new Error("Failed to fetch shares");
@@ -146,7 +164,7 @@ export async function searchUsers(query: string): Promise<{ id: string; email: s
   return res.json();
 }
 
-export async function getComposites(): Promise<CompositeWorkflow[]> {
+export async function getComposites(): Promise<CompositeWorkflowWithItems[]> {
   const res = await fetch("/api/composites");
   if (!res.ok) throw new Error("Failed to fetch composites");
   return res.json();
@@ -158,11 +176,11 @@ export async function getComposite(id: number): Promise<CompositeWorkflowWithIte
   return res.json();
 }
 
-export async function createComposite(name: string, description: string, workflowIds: number[]): Promise<CompositeWorkflow> {
+export async function createComposite(name: string, description: string, stepIds: number[]): Promise<CompositeWorkflow> {
   const res = await fetch("/api/composites", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, description, workflowIds }),
+    body: JSON.stringify({ name, description, stepIds }),
   });
   if (!res.ok) throw new Error("Failed to create composite");
   return res.json();
