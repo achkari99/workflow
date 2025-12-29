@@ -21,6 +21,19 @@ function getUserId(req: Request): string | undefined {
   return (req.user as any)?.id;
 }
 
+async function getSessionMember(sessionId: number, userId?: string) {
+  if (!userId) return undefined;
+  const members = await storage.getCompositeWorkflowSessionMembers(sessionId);
+  return members.find((m) => m.userId === userId);
+}
+
+function ensureSessionPermission(member: any | undefined, ownerId: string | null, userId: string | undefined, permission: keyof typeof member) {
+  if (!userId) return false;
+  if (ownerId && ownerId === userId) return true;
+  if (!member) return false;
+  return !!member[permission];
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
@@ -500,8 +513,16 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Unauthorized" });
       }
       const sourceId = parseInt(req.params.id);
-      const { name, description } = req.body || {};
-      const composite = await storage.cloneCompositeForUser(sourceId, userId, name, description);
+      const { name, description, targetUserId } = req.body || {};
+      const source = await storage.getCompositeWorkflowWithItems(sourceId);
+      if (!source) {
+        return res.status(404).json({ error: "Composite workflow not found" });
+      }
+      if (source.ownerId && source.ownerId !== userId) {
+        return res.status(403).json({ error: "You can only share composites you own" });
+      }
+      const targetOwnerId = targetUserId || userId;
+      const composite = await storage.cloneCompositeForUser(sourceId, targetOwnerId, name, description);
       res.status(201).json(composite);
     } catch (error) {
       console.error("Failed to copy composite workflow:", error);
@@ -527,6 +548,13 @@ export async function registerRoutes(
       if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
       }
+      const composite = await storage.getCompositeWorkflowWithItems(req.body.compositeId);
+      if (!composite) {
+        return res.status(404).json({ error: "Composite workflow not found" });
+      }
+      if (composite.ownerId && composite.ownerId !== userId) {
+        return res.status(403).json({ error: "You can only create sessions for composites you own" });
+      }
       const validation = insertCompositeWorkflowSessionSchema.safeParse({
         compositeId: req.body.compositeId,
         ownerId: userId,
@@ -537,6 +565,14 @@ export async function registerRoutes(
       }
 
       const session = await storage.createCompositeWorkflowSession(validation.data);
+      for (const step of composite.steps) {
+        await storage.createCompositeWorkflowSessionStep({
+          sessionId: session.id,
+          stepId: step.id,
+          isCompleted: !!step.isCompleted,
+          completedAt: step.completedAt || null,
+        });
+      }
       await storage.addCompositeWorkflowSessionMember({
         sessionId: session.id,
         userId,

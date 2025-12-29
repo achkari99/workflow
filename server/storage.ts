@@ -92,6 +92,7 @@ export interface IStorage {
   addCompositeWorkflowSessionMember(member: InsertCompositeWorkflowSessionMember): Promise<CompositeWorkflowSessionMember>;
   updateCompositeWorkflowSessionMember(id: number, data: Partial<InsertCompositeWorkflowSessionMember>): Promise<CompositeWorkflowSessionMember | undefined>;
   getCompositeWorkflowSessionMembers(sessionId: number): Promise<CompositeWorkflowSessionMember[]>;
+  createCompositeWorkflowSessionStep(step: InsertCompositeWorkflowSessionStep): Promise<CompositeWorkflowSessionStep>;
   assignCompositeWorkflowSessionStep(assignment: InsertCompositeWorkflowSessionAssignment): Promise<CompositeWorkflowSessionAssignment>;
   removeCompositeWorkflowSessionAssignment(id: number): Promise<boolean>;
   getCompositeWorkflowSessionAssignments(sessionId: number): Promise<CompositeWorkflowSessionAssignment[]>;
@@ -102,7 +103,7 @@ export interface IStorage {
 
   createCompositeWorkflow(composite: InsertCompositeWorkflow): Promise<CompositeWorkflow>;
   cloneCompositeForUser(sourceCompositeId: number, ownerId: string, name?: string, description?: string): Promise<CompositeWorkflow>;
-  cloneStepToComposite(compositeId: number, originalStepId: number, orderIndex: number): Promise<CompositeWorkflowItem>;
+  cloneStepToComposite(compositeId: number, originalStepId: number, orderIndex: number, cloneIntelDocs?: boolean): Promise<CompositeWorkflowItem>;
   addStepToComposite(item: InsertCompositeWorkflowItem): Promise<CompositeWorkflowItem>;
   removeStepFromComposite(id: number): Promise<boolean>;
   deleteCompositeWorkflow(id: number): Promise<boolean>;
@@ -451,6 +452,11 @@ export class DatabaseStorage implements IStorage {
     return newMember;
   }
 
+  async createCompositeWorkflowSessionStep(step: InsertCompositeWorkflowSessionStep): Promise<CompositeWorkflowSessionStep> {
+    const [created] = await db.insert(compositeWorkflowSessionSteps).values(step).returning();
+    return created;
+  }
+
   async updateCompositeWorkflowSessionMember(id: number, data: Partial<InsertCompositeWorkflowSessionMember>): Promise<CompositeWorkflowSessionMember | undefined> {
     const [updated] = await db.update(compositeWorkflowSessionMembers).set(data).where(eq(compositeWorkflowSessionMembers.id, id)).returning();
     return updated || undefined;
@@ -506,13 +512,19 @@ export class DatabaseStorage implements IStorage {
 
     for (let i = 0; i < source.steps.length; i++) {
       const step = source.steps[i];
-      await this.cloneStepToComposite(newComposite.id, step.id, i);
+      await this.cloneStepToComposite(newComposite.id, step.id, i, false);
     }
+
+    await db.insert(compositeWorkflowCopies).values({
+      sourceCompositeId,
+      copiedCompositeId: newComposite.id,
+      ownerId,
+    });
 
     return newComposite;
   }
 
-  async cloneStepToComposite(compositeId: number, originalStepId: number, orderIndex: number): Promise<CompositeWorkflowItem> {
+  async cloneStepToComposite(compositeId: number, originalStepId: number, orderIndex: number, cloneIntelDocs: boolean = true): Promise<CompositeWorkflowItem> {
     const originalStep = await this.getStepWithDetails(originalStepId);
     if (!originalStep) throw new Error("Template step not found");
 
@@ -531,7 +543,7 @@ export class DatabaseStorage implements IStorage {
     }).returning();
 
     // Clone intel docs
-    if (originalStep.intelDocs.length > 0) {
+    if (cloneIntelDocs && originalStep.intelDocs.length > 0) {
       for (const doc of originalStep.intelDocs) {
         await this.createIntelDoc({
           stepId: clonedStep.id,
