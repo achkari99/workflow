@@ -22,10 +22,8 @@ import {
   CheckCircle2,
   FileText,
   Plus,
-  Target,
   Loader2,
   Send,
-  UserPlus,
   Edit3,
   Trash2,
   X,
@@ -238,6 +236,7 @@ export default function CompositeSessionPage() {
 
   const selectedStep = compositeSteps.find((step) => step.id === selectedStepId) || null;
   const selectedSessionStep = selectedStepId ? sessionStepsByStepId.get(selectedStepId) : null;
+  const isPhaseCompleted = !!selectedSessionStep?.isCompleted;
   const selectedAssignments = selectedStepId ? assignmentsByStep.get(selectedStepId) || [] : [];
   const visibleIntelDocs = useMemo(
     () => (session?.intelDocs || []).filter((doc) => doc.stepId === selectedStepId),
@@ -357,10 +356,13 @@ export default function CompositeSessionPage() {
 
   useEffect(() => {
     if (!messages || !messages.length || !user?.id) return;
-    const ids = messages.map((message) => message.id);
-    const newestId = ids[ids.length - 1];
+    const unreadIds = messages
+      .filter((message) => !(message.reads || []).some((read) => read.userId === user.id))
+      .map((message) => message.id);
+    if (!unreadIds.length) return;
+    const newestId = unreadIds[unreadIds.length - 1];
     if (lastReadMessageId === newestId) return;
-    markReadMutation.mutate(ids);
+    markReadMutation.mutate(unreadIds);
     setLastReadMessageId(newestId);
   }, [messages, user?.id, lastReadMessageId, markReadMutation]);
 
@@ -554,76 +556,101 @@ export default function CompositeSessionPage() {
             )}
           </div>
 
-          <div className="p-8 space-y-6">
-            <div className="bg-black/40 border border-white/5 p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xs font-mono text-white/40 uppercase tracking-widest">Assignments</h3>
-                <div className="flex items-center gap-2">
-                  <UserPlus className="w-3 h-3 text-primary" />
-                  <span className="text-[10px] font-mono text-primary uppercase tracking-widest">Manage</span>
+          <div className="p-8">
+            <div className="bg-black/40 border border-white/5 flex flex-col min-h-[420px] max-h-[calc(100vh-260px)]">
+              <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Session Chat</p>
+                  <p className="text-sm text-white/70">{session.name || session.composite.name}</p>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-3 text-[10px] font-mono text-white/40 uppercase">
+                  {session.members.map((member) => (
+                    <span key={member.id} className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: member.laneColor }} />
+                      {getDisplayName(member)}
+                    </span>
+                  ))}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {selectedAssignments.length === 0 ? (
-                  <span className="text-xs text-white/30 font-mono">No assignees yet</span>
+              <div ref={chatListRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                {messagesLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  </div>
+                ) : !messages || messages.length === 0 ? (
+                  <div className="text-center py-10 text-xs text-white/40 font-mono uppercase tracking-widest">
+                    No messages yet
+                  </div>
                 ) : (
-                  selectedAssignments.map((assignment) => {
-                    const assignee = session.members.find((m) => m.userId === assignment.assigneeUserId);
+                  messages.map((message) => {
+                    const isOwn = message.userId === user?.id;
+                    const author = message.user;
+                    const authorName = author ? (author.firstName || author.username || author.email || message.userId) : message.userId;
+                    const readBy = (message.reads || [])
+                      .filter((read) => read.userId !== message.userId)
+                      .map((read) => read.user?.firstName || read.user?.username || read.user?.email || read.userId);
+                    const maxSeen = 3;
+                    const seenNames = readBy.slice(0, maxSeen);
+                    const seenLabel = isOwn && readBy.length > 0
+                      ? `Seen by ${seenNames.join(", ")}${readBy.length > maxSeen ? ` +${readBy.length - maxSeen}` : ""}`
+                      : null;
                     return (
-                      <div
-                        key={assignment.id}
-                        className="flex items-center gap-2 px-2 py-1 border border-white/10 bg-white/5 text-[10px] font-mono text-white/60"
-                      >
-                        <div className="h-2 w-2 rounded-full" style={{ backgroundColor: assignee?.laneColor || "#38bdf8" }} />
-                        <span>{assignee ? getDisplayName(assignee) : assignment.assigneeUserId}</span>
-                        {assignment.allowDelegation && <Shield className="w-3 h-3 text-primary" />}
+                      <div key={message.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[70%] border px-4 py-3 ${isOwn ? "border-primary/40 bg-primary/10 text-white" : "border-white/10 bg-white/5 text-white/80"}`}>
+                          <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                            <span>{authorName}</span>
+                            <div className="flex items-center gap-2">
+                              <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                              {(isOwn || isOwner) && (
+                                <button
+                                  onClick={() => deleteMessageMutation.mutate(message.id)}
+                                  className="text-white/40 hover:text-red-400"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <p className="mt-2 text-sm whitespace-pre-wrap">{message.content}</p>
+                          {seenLabel && (
+                            <p className="mt-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
+                              {seenLabel}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     );
                   })
                 )}
               </div>
-              <p className="text-[11px] text-white/40 font-mono">
-                Assignments are managed in the Session Control page.
-              </p>
-            </div>
-            {selectedStep && (
-              <div className="bg-black/40 border border-white/5 p-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-mono text-white/40 uppercase tracking-widest">
-                    <Target className="w-3 h-3" />
-                    Step Control
-                  </div>
-                  {currentMember && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleLaneDelegationMutation.mutate()}
-                      className="text-[10px] text-white/40 hover:text-primary"
-                    >
-                      {currentMember.allowLaneDelegation ? "Lock My Lane" : "Open My Lane"}
-                    </Button>
-                  )}
-                </div>
-                <div className="mt-4">
-                  <Button
-                    onClick={() => completeMutation.mutate()}
-                    disabled={!canCompleteSelectedStep || completeMutation.isPending}
-                    className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
-                  >
-                    {completeMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                    )}
-                    Complete Phase
-                  </Button>
-                </div>
+              <div className="border-t border-white/5 p-4 flex items-center gap-3">
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey && chatInput.trim()) {
+                      e.preventDefault();
+                      if (!canChat) return;
+                      sendMessageMutation.mutate();
+                    }
+                  }}
+                  placeholder={canChat ? "Write a message..." : "Chat permissions required"}
+                  disabled={!canChat}
+                  className="flex-1 bg-black/30 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
+                />
+                <Button
+                  onClick={() => sendMessageMutation.mutate()}
+                  disabled={!canChat || !chatInput.trim() || sendMessageMutation.isPending}
+                  className="h-9 w-9 p-0 bg-primary text-black hover:bg-primary/90"
+                >
+                  {sendMessageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                </Button>
               </div>
-            )}
+            </div>
           </div>
         </main>
 
-        <aside className="border-l border-white/5 bg-black/60 overflow-y-auto">
+        <aside className="border-l border-white/5 bg-black/60 flex flex-col">
           <div className="p-6 border-b border-white/5 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -642,7 +669,7 @@ export default function CompositeSessionPage() {
             )}
           </div>
 
-          <div className="p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
             <AnimatePresence>
               {isAddingDoc && selectedStepId && (
                 <motion.div
@@ -808,6 +835,21 @@ export default function CompositeSessionPage() {
                 );
               })
             )}
+          </div>
+
+          <div className="border-t border-white/5 p-4">
+            <Button
+              onClick={() => completeMutation.mutate()}
+              disabled={!selectedStepId || isPhaseCompleted || !canCompleteSelectedStep || completeMutation.isPending}
+              className={`w-full h-12 font-mono uppercase tracking-widest ${isPhaseCompleted ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" : "bg-primary hover:bg-primary/90 text-black"}`}
+            >
+              {completeMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+              )}
+              {isPhaseCompleted ? "Phase Completed" : "Complete Phase"}
+            </Button>
           </div>
         </aside>
       </div>
