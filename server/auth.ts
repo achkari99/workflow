@@ -21,6 +21,27 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+const PostgresStore = connectPg(session);
+const sessionStore = new PostgresStore({
+  conString: process.env.DATABASE_URL,
+  createTableIfMissing: true,
+  tableName: "sessions",
+});
+
+export const sessionMiddleware = session({
+  secret: process.env.SESSION_SECRET || "world-class-designer-secret",
+  resave: false,
+  saveUninitialized: false,
+  store: sessionStore,
+  cookie: {
+    maxAge: sessionTtl,
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    sameSite: "lax",
+  },
+});
+
 function enforceSameOrigin(req: Request, res: Response, next: NextFunction) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
   const origin = req.get("origin") || req.get("referer");
@@ -38,28 +59,7 @@ function enforceSameOrigin(req: Request, res: Response, next: NextFunction) {
 }
 
 export async function setupAuth(app: Express) {
-  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  const PostgresStore = connectPg(session);
-  const sessionStore = new PostgresStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-    tableName: "sessions",
-  });
-
-  app.use(
-    session({
-      secret: process.env.SESSION_SECRET || "world-class-designer-secret",
-      resave: false,
-      saveUninitialized: false,
-      store: sessionStore,
-      cookie: {
-        maxAge: sessionTtl,
-        secure: process.env.NODE_ENV === "production",
-        httpOnly: true,
-        sameSite: "lax",
-      },
-    })
-  );
+  app.use(sessionMiddleware);
 
   app.use(passport.initialize());
   app.use(passport.session());

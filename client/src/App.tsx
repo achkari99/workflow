@@ -11,6 +11,8 @@ import WorkflowList from "@/pages/workflow-list";
 import IntelPage from "@/pages/intel";
 import CompositesPage from "@/pages/composites";
 import CompositeWorkspace from "@/pages/composite-workspace";
+import CompositeSession from "@/pages/composite-session";
+import CompositeSessions from "@/pages/composite-sessions";
 import AuthPage from "@/pages/auth-page";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
@@ -55,8 +57,17 @@ function Router() {
       <Route path="/composites">
         {(params) => <ProtectedRoute component={CompositesPage} path="/composites" {...params} />}
       </Route>
+      <Route path="/composite-sessions">
+        {(params) => <ProtectedRoute component={CompositeSessions} path="/composite-sessions" {...params} />}
+      </Route>
+      <Route path="/composite-sessions/:id/manage">
+        {(params) => <ProtectedRoute component={CompositeSessions} path="/composite-sessions/:id/manage" {...params} />}
+      </Route>
       <Route path="/composites/:id">
         {(params) => <ProtectedRoute component={CompositeWorkspace} path="/composites/:id" {...params} />}
+      </Route>
+      <Route path="/composite-sessions/:id">
+        {(params) => <ProtectedRoute component={CompositeSession} path="/composite-sessions/:id" {...params} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

@@ -2,6 +2,7 @@ import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { storage } from "./storage";
+import { broadcastSession } from "./realtime";
 import {
   insertWorkflowSchema,
   insertStepSchema,
@@ -12,7 +13,10 @@ import {
   insertCompositeWorkflowSessionSchema,
   insertCompositeWorkflowSessionMemberSchema,
   insertCompositeWorkflowSessionAssignmentSchema,
+  insertCompositeWorkflowSessionAssignmentDelegateSchema,
+  insertCompositeWorkflowSessionLaneDelegateSchema,
   insertCompositeWorkflowSessionIntelDocSchema,
+  insertCompositeWorkflowSessionMessageSchema,
 } from "@shared/schema";
 import { fromError } from "zod-validation-error";
 import { supabase } from "./supabase";
@@ -569,8 +573,8 @@ export async function registerRoutes(
         await storage.createCompositeWorkflowSessionStep({
           sessionId: session.id,
           stepId: step.id,
-          isCompleted: !!step.isCompleted,
-          completedAt: step.completedAt || null,
+          isCompleted: false,
+          completedAt: null,
         });
       }
       await storage.addCompositeWorkflowSessionMember({
@@ -580,7 +584,8 @@ export async function registerRoutes(
         canManageAssignments: true,
         canManageSharing: true,
         canEditIntel: true,
-        allowLaneDelegation: true,
+        canChat: true,
+        allowLaneDelegation: false,
         laneColor: req.body.laneColor || "#84cc16",
       });
 
@@ -591,22 +596,80 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/composite-sessions", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessions = await storage.getCompositeWorkflowSessionsForUser(userId);
+      res.json(sessions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch sessions" });
+    }
+  });
+
   app.get("/api/composite-sessions/:id", async (req, res) => {
     try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const sessionId = parseInt(req.params.id);
       const session = await storage.getCompositeWorkflowSession(sessionId);
       if (!session) {
         return res.status(404).json({ error: "Session not found" });
       }
-      res.json(session);
+      const member = await getSessionMember(sessionId, userId);
+      if (session.ownerId !== userId && !member) {
+        return res.status(403).json({ error: "You don't have access to this session" });
+      }
+      const intelDocsWithUrls = await attachSignedUrls(session.intelDocs || []);
+      res.json({ ...session, intelDocs: intelDocsWithUrls });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch session" });
     }
   });
 
+  app.delete("/api/composite-sessions/:id", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      const canManage = ensureSessionPermission(member, session.ownerId || null, userId, "canManageSharing");
+      if (session.ownerId !== userId && !canManage) {
+        return res.status(403).json({ error: "You don't have permission to delete this session" });
+      }
+      await storage.deleteCompositeWorkflowSession(sessionId);
+      broadcastSession(sessionId, { type: "session:deleted", sessionId });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete session" });
+    }
+  });
+
   app.post("/api/composite-sessions/:id/members", async (req, res) => {
     try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const requester = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(requester, session.ownerId || null, userId, "canManageSharing")) {
+        return res.status(403).json({ error: "You don't have permission to manage sharing" });
+      }
       const validation = insertCompositeWorkflowSessionMemberSchema.safeParse({
         sessionId,
         userId: req.body.userId,
@@ -614,14 +677,16 @@ export async function registerRoutes(
         canManageAssignments: !!req.body.canManageAssignments,
         canManageSharing: !!req.body.canManageSharing,
         canEditIntel: !!req.body.canEditIntel,
+        canChat: !!req.body.canChat,
         allowLaneDelegation: !!req.body.allowLaneDelegation,
         laneColor: req.body.laneColor || "#38bdf8",
       });
       if (!validation.success) {
         return res.status(400).json({ error: fromError(validation.error).toString() });
       }
-      const member = await storage.addCompositeWorkflowSessionMember(validation.data);
-      res.status(201).json(member);
+      const newMember = await storage.addCompositeWorkflowSessionMember(validation.data);
+      broadcastSession(sessionId, { type: "session:member_added", sessionId, member: newMember });
+      res.status(201).json(newMember);
     } catch (error) {
       res.status(500).json({ error: "Failed to add session member" });
     }
@@ -629,62 +694,432 @@ export async function registerRoutes(
 
   app.patch("/api/composite-sessions/:sessionId/members/:memberId", async (req, res) => {
     try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const memberId = parseInt(req.params.memberId);
+      const sessionId = parseInt(req.params.sessionId);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canManageSharing")) {
+        return res.status(403).json({ error: "You don't have permission to manage sharing" });
+      }
       const updated = await storage.updateCompositeWorkflowSessionMember(memberId, req.body);
       if (!updated) {
         return res.status(404).json({ error: "Member not found" });
       }
+      broadcastSession(sessionId, { type: "session:member_updated", sessionId, member: updated });
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update session member" });
     }
   });
 
+  app.delete("/api/composite-sessions/:sessionId/members/:memberId", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const memberId = parseInt(req.params.memberId);
+      const sessionId = parseInt(req.params.sessionId);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canManageSharing")) {
+        return res.status(403).json({ error: "You don't have permission to manage sharing" });
+      }
+      const target = session.members.find((m: any) => m.id === memberId);
+      if (!target) {
+        return res.status(404).json({ error: "Member not found" });
+      }
+      if (target.userId === session.ownerId) {
+        return res.status(400).json({ error: "Cannot remove the session owner" });
+      }
+      const removed = await storage.removeCompositeWorkflowSessionMember(memberId);
+      if (!removed) {
+        return res.status(404).json({ error: "Member not found" });
+      }
+      broadcastSession(sessionId, { type: "session:member_removed", sessionId, memberId });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove session member" });
+    }
+  });
+
   app.post("/api/composite-sessions/:id/assignments", async (req, res) => {
     try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canManageAssignments")) {
+        return res.status(403).json({ error: "You don't have permission to manage assignments" });
+      }
       const validation = insertCompositeWorkflowSessionAssignmentSchema.safeParse({
         sessionId,
         stepId: req.body.stepId,
         assigneeUserId: req.body.assigneeUserId,
         allowDelegation: !!req.body.allowDelegation,
+        allowDelegationToEveryone: !!req.body.allowDelegationToEveryone,
       });
       if (!validation.success) {
         return res.status(400).json({ error: fromError(validation.error).toString() });
       }
       const assignment = await storage.assignCompositeWorkflowSessionStep(validation.data);
+      broadcastSession(sessionId, { type: "session:assignment_added", sessionId, assignment });
       res.status(201).json(assignment);
     } catch (error) {
       res.status(500).json({ error: "Failed to assign step" });
     }
   });
 
+  app.patch("/api/composite-sessions/:id/assignments/:assignmentId", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const assignmentId = parseInt(req.params.assignmentId);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canManageAssignments")) {
+        return res.status(403).json({ error: "You don't have permission to manage assignments" });
+      }
+      const updated = await storage.updateCompositeWorkflowSessionAssignment(assignmentId, {
+        allowDelegation: req.body.allowDelegation,
+        allowDelegationToEveryone: req.body.allowDelegationToEveryone,
+      });
+      if (!updated) {
+        return res.status(404).json({ error: "Assignment not found" });
+      }
+      broadcastSession(sessionId, { type: "session:assignment_updated", sessionId, assignment: updated });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update assignment" });
+    }
+  });
+
+  app.post("/api/composite-sessions/:id/assignments/:assignmentId/delegates", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const assignmentId = parseInt(req.params.assignmentId);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const assignment = session.assignments.find((a: any) => a.id === assignmentId);
+      if (!assignment) {
+        return res.status(404).json({ error: "Assignment not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      const canManage = ensureSessionPermission(member, session.ownerId || null, userId, "canManageAssignments");
+      if (assignment.assigneeUserId !== userId && !canManage) {
+        return res.status(403).json({ error: "You don't have permission to add delegates" });
+      }
+      const validation = insertCompositeWorkflowSessionAssignmentDelegateSchema.safeParse({
+        assignmentId,
+        delegateUserId: req.body.userId,
+      });
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+      const created = await storage.addCompositeWorkflowSessionAssignmentDelegate(validation.data);
+      broadcastSession(sessionId, { type: "session:assignment_delegate_added", sessionId, assignmentId, delegate: created });
+      res.status(201).json(created);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add assignment delegate" });
+    }
+  });
+
+  app.delete("/api/composite-sessions/:id/assignments/:assignmentId/delegates/:delegateId", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const assignmentId = parseInt(req.params.assignmentId);
+      const delegateId = parseInt(req.params.delegateId);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const assignment = session.assignments.find((a: any) => a.id === assignmentId);
+      if (!assignment) {
+        return res.status(404).json({ error: "Assignment not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      const canManage = ensureSessionPermission(member, session.ownerId || null, userId, "canManageAssignments");
+      if (assignment.assigneeUserId !== userId && !canManage) {
+        return res.status(403).json({ error: "You don't have permission to remove delegates" });
+      }
+      const removed = await storage.removeCompositeWorkflowSessionAssignmentDelegate(delegateId);
+      if (!removed || removed.assignmentId !== assignmentId) {
+        return res.status(404).json({ error: "Delegate not found" });
+      }
+      broadcastSession(sessionId, { type: "session:assignment_delegate_removed", sessionId, assignmentId, delegateId });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove assignment delegate" });
+    }
+  });
+
   app.delete("/api/composite-sessions/:id/assignments/:assignmentId", async (req, res) => {
     try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canManageAssignments")) {
+        return res.status(403).json({ error: "You don't have permission to manage assignments" });
+      }
       const assignmentId = parseInt(req.params.assignmentId);
       await storage.removeCompositeWorkflowSessionAssignment(assignmentId);
+      broadcastSession(sessionId, { type: "session:assignment_removed", sessionId, assignmentId });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to remove assignment" });
     }
   });
 
+  app.post("/api/composite-sessions/:id/lane-delegates", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const ownerUserId = req.body.ownerUserId;
+      const member = await getSessionMember(sessionId, userId);
+      const canManage = ensureSessionPermission(member, session.ownerId || null, userId, "canManageAssignments");
+      if (ownerUserId !== userId && !canManage) {
+        return res.status(403).json({ error: "You don't have permission to manage this lane" });
+      }
+      const validation = insertCompositeWorkflowSessionLaneDelegateSchema.safeParse({
+        sessionId,
+        ownerUserId,
+        delegateUserId: req.body.userId,
+      });
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+      const created = await storage.addCompositeWorkflowSessionLaneDelegate(validation.data);
+      broadcastSession(sessionId, { type: "session:lane_delegate_added", sessionId, delegate: created });
+      res.status(201).json(created);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add lane delegate" });
+    }
+  });
+
+  app.delete("/api/composite-sessions/:id/lane-delegates/:delegateId", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const delegateId = parseInt(req.params.delegateId);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      const canManage = ensureSessionPermission(member, session.ownerId || null, userId, "canManageAssignments");
+      const delegate = await storage.removeCompositeWorkflowSessionLaneDelegate(delegateId);
+      if (!delegate) {
+        return res.status(404).json({ error: "Delegate not found" });
+      }
+      if (delegate.ownerUserId !== userId && !canManage) {
+        return res.status(403).json({ error: "You don't have permission to manage this lane" });
+      }
+      broadcastSession(sessionId, { type: "session:lane_delegate_removed", sessionId, delegateId });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove lane delegate" });
+    }
+  });
+
   app.patch("/api/composite-sessions/:id/steps/:sessionStepId", async (req, res) => {
     try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (session.ownerId !== userId && !member) {
+        return res.status(403).json({ error: "You don't have access to this session" });
+      }
       const sessionStepId = parseInt(req.params.sessionStepId);
+      const sessionStep = session.sessionSteps.find((step: any) => step.id === sessionStepId);
+      if (!sessionStep) {
+        return res.status(404).json({ error: "Session step not found" });
+      }
+      const compositeSteps = session.composite?.steps || [];
+      const stepsById = new Map(session.sessionSteps.map((s: any) => [s.stepId, s]));
+
+      const assignmentsForStep = session.assignments.filter((a: any) => a.stepId === sessionStep.stepId);
+
+      const getNextIncompleteForAssignee = (assigneeId: string) => {
+        const assigned = new Set(
+          session.assignments.filter((a: any) => a.assigneeUserId === assigneeId).map((a: any) => a.stepId)
+        );
+        for (const step of compositeSteps) {
+          if (!assigned.has(step.id)) continue;
+          const sessionState = stepsById.get(step.id);
+          if (sessionState && !sessionState.isCompleted) {
+            return step.id;
+          }
+        }
+        return null;
+      };
+
+      const canCompleteAsAssignee = assignmentsForStep.some((a: any) => {
+        if (a.assigneeUserId !== userId) return false;
+        return getNextIncompleteForAssignee(userId) === sessionStep.stepId;
+      });
+
+      const canCompleteAsDelegate = assignmentsForStep.some((a: any) => {
+        if (a.assigneeUserId === userId) return false;
+        if (!a.allowDelegation) return false;
+        if (a.allowDelegationToEveryone) {
+          return getNextIncompleteForAssignee(a.assigneeUserId) === sessionStep.stepId;
+        }
+        const delegates = Array.isArray(a.delegates) ? a.delegates : [];
+        const hasAssignmentDelegates = delegates.length > 0;
+        const isAssignmentDelegate = delegates.some((d: any) => d.delegateUserId === userId);
+        if (hasAssignmentDelegates && !isAssignmentDelegate) return false;
+        if (!hasAssignmentDelegates) {
+          const assigneeMember = session.members.find((m: any) => m.userId === a.assigneeUserId);
+          const laneDelegates = Array.isArray(assigneeMember?.laneDelegates) ? assigneeMember.laneDelegates : [];
+          const isLaneDelegate = laneDelegates.some((d: any) => d.delegateUserId === userId);
+          if (!isLaneDelegate) return false;
+        }
+        return getNextIncompleteForAssignee(a.assigneeUserId) === sessionStep.stepId;
+      });
+
+      const canComplete = canCompleteAsAssignee || canCompleteAsDelegate;
+
+      if (req.body.isCompleted && !sessionStep.isCompleted) {
+        if (!canComplete) {
+          return res.status(403).json({ error: "You don't have permission to complete this step" });
+        }
+        const updated = await storage.updateCompositeWorkflowSessionStep(sessionStepId, {
+          isCompleted: true,
+          completedAt: new Date(),
+          completedByUserId: userId,
+        });
+        // Session completion should not mutate the source composite step.
+        broadcastSession(sessionId, {
+          type: "session:step_completed",
+          sessionId,
+          stepId: sessionStep.stepId,
+          sessionStepId,
+        });
+        return res.json(updated);
+      }
+
       const updated = await storage.updateCompositeWorkflowSessionStep(sessionStepId, req.body);
       if (!updated) {
         return res.status(404).json({ error: "Session step not found" });
       }
+      broadcastSession(sessionId, { type: "session:step_updated", sessionId, sessionStepId, stepId: sessionStep.stepId });
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update session step" });
     }
   });
 
+  app.patch("/api/composite-sessions/:id/steps/:sessionStepId/content", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canEditSteps")) {
+        return res.status(403).json({ error: "You don't have permission to edit steps" });
+      }
+      const sessionStepId = parseInt(req.params.sessionStepId);
+      const sessionStep = session.sessionSteps.find((step: any) => step.id === sessionStepId);
+      if (!sessionStep) {
+        return res.status(404).json({ error: "Session step not found" });
+      }
+      const updatePayload: Record<string, any> = {};
+      for (const key of ["name", "description", "objective", "instructions"]) {
+        if (req.body[key] !== undefined) {
+          updatePayload[key] = req.body[key];
+        }
+      }
+      if (Object.keys(updatePayload).length === 0) {
+        return res.status(400).json({ error: "No updates provided" });
+      }
+      const updated = await storage.updateStep(sessionStep.stepId, updatePayload);
+      if (!updated) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+      broadcastSession(sessionId, { type: "session:step_content_updated", sessionId, stepId: sessionStep.stepId });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update step content" });
+    }
+  });
+
   app.post("/api/composite-sessions/:id/intel", async (req, res) => {
     try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canEditIntel")) {
+        return res.status(403).json({ error: "You don't have permission to edit intel" });
+      }
       const validation = insertCompositeWorkflowSessionIntelDocSchema.safeParse({
         sessionId,
         stepId: req.body.stepId,
@@ -700,9 +1135,241 @@ export async function registerRoutes(
         return res.status(400).json({ error: fromError(validation.error).toString() });
       }
       const doc = await storage.addCompositeWorkflowSessionIntelDoc(validation.data);
+      broadcastSession(sessionId, { type: "session:intel_added", sessionId, doc });
       res.status(201).json(doc);
     } catch (error) {
       res.status(500).json({ error: "Failed to add session intel doc" });
+    }
+  });
+
+  app.get("/api/composite-sessions/:id/intel", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (session.ownerId !== userId && !member) {
+        return res.status(403).json({ error: "You don't have access to this session" });
+      }
+      const docs = await storage.getCompositeWorkflowSessionIntelDocs(sessionId);
+      const docsWithUrls = await attachSignedUrls(docs);
+      res.json(docsWithUrls);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch session intel docs" });
+    }
+  });
+
+  app.post("/api/composite-sessions/:id/intel/upload", upload.single("file"), async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canEditIntel")) {
+        return res.status(403).json({ error: "You don't have permission to edit intel" });
+      }
+      const { title, docType, stepId } = req.body;
+      const file = req.file;
+      if (!title || !file || !stepId) {
+        return res.status(400).json({ error: "Title, step, and file are required" });
+      }
+
+      const safeName = file.originalname.replace(/[^\w.\-]+/g, "_");
+      const objectPath = `${sessionId}/steps/${stepId}/${Date.now()}-${safeName}`;
+
+      const { error } = await supabase.storage.from("intel-docs").upload(objectPath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
+      if (error) {
+        console.error("Supabase upload error:", error);
+        return res.status(500).json({ error: "Failed to upload file", details: error.message });
+      }
+
+      const validation = insertCompositeWorkflowSessionIntelDocSchema.safeParse({
+        sessionId,
+        stepId: parseInt(stepId, 10),
+        title,
+        content: `Attached file: ${file.originalname}`,
+        docType: docType || "note",
+        filePath: objectPath,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+      });
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+      const doc = await storage.addCompositeWorkflowSessionIntelDoc(validation.data);
+      const [docWithUrl] = await attachSignedUrls([doc]);
+      broadcastSession(sessionId, { type: "session:intel_added", sessionId, doc: docWithUrl });
+      res.status(201).json(docWithUrl);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to upload session intel doc" });
+    }
+  });
+
+  app.delete("/api/composite-sessions/:id/intel/:docId", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canEditIntel")) {
+        return res.status(403).json({ error: "You don't have permission to edit intel" });
+      }
+      const docId = parseInt(req.params.docId);
+      const existingDoc = await storage.getCompositeWorkflowSessionIntelDoc(docId);
+      if (!existingDoc || existingDoc.sessionId !== sessionId) {
+        return res.status(404).json({ error: "Intel doc not found" });
+      }
+      const removed = await storage.removeCompositeWorkflowSessionIntelDoc(docId);
+      if (existingDoc.filePath) {
+        await supabase.storage.from("intel-docs").remove([existingDoc.filePath]);
+      }
+      broadcastSession(sessionId, { type: "session:intel_removed", sessionId, docId });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove session intel doc" });
+    }
+  });
+
+  app.get("/api/composite-sessions/:id/messages", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (session.ownerId !== userId && !member) {
+        return res.status(403).json({ error: "You don't have access to this session" });
+      }
+      const messages = await storage.getCompositeWorkflowSessionMessages(sessionId);
+      res.json(messages);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch chat messages" });
+    }
+  });
+
+  app.post("/api/composite-sessions/:id/messages", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canChat")) {
+        return res.status(403).json({ error: "You don't have permission to chat" });
+      }
+      const validation = insertCompositeWorkflowSessionMessageSchema.safeParse({
+        sessionId,
+        userId,
+        content: req.body.content,
+      });
+      if (!validation.success) {
+        return res.status(400).json({ error: fromError(validation.error).toString() });
+      }
+      const message = await storage.addCompositeWorkflowSessionMessage(validation.data);
+      broadcastSession(sessionId, { type: "session:chat_message", sessionId, messageId: message.id });
+      res.status(201).json(message);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send chat message" });
+    }
+  });
+
+  app.post("/api/composite-sessions/:id/messages/read", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (session.ownerId !== userId && !member) {
+        return res.status(403).json({ error: "You don't have access to this session" });
+      }
+      const messageIds: number[] = Array.isArray(req.body.messageIds)
+        ? req.body.messageIds.map((id: any) => parseInt(id, 10)).filter((id: number) => !Number.isNaN(id))
+        : [];
+      if (!messageIds.length) {
+        return res.status(400).json({ error: "No message ids provided" });
+      }
+      const messages = await storage.getCompositeWorkflowSessionMessages(sessionId);
+      const validIds = new Set(messages.map((message) => message.id));
+      const reads = [];
+      for (const messageId of messageIds) {
+        if (!validIds.has(messageId)) continue;
+        const read = await storage.addCompositeWorkflowSessionMessageRead({ messageId, userId });
+        if (read) reads.push(read);
+      }
+      broadcastSession(sessionId, { type: "session:chat_read", sessionId, userId });
+      res.json({ success: true, reads });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark messages read" });
+    }
+  });
+
+  app.delete("/api/composite-sessions/:id/messages/:messageId", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const messageId = parseInt(req.params.messageId);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (session.ownerId !== userId && !member) {
+        return res.status(403).json({ error: "You don't have access to this session" });
+      }
+      const messages = await storage.getCompositeWorkflowSessionMessages(sessionId);
+      const target = messages.find((message) => message.id === messageId);
+      if (!target) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+      if (target.userId !== userId && session.ownerId !== userId) {
+        return res.status(403).json({ error: "You don't have permission to delete this message" });
+      }
+      await storage.removeCompositeWorkflowSessionMessage(messageId);
+      broadcastSession(sessionId, { type: "session:chat_deleted", sessionId, messageId });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete message" });
     }
   });
 

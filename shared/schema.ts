@@ -65,6 +65,7 @@ export const compositeWorkflowSessionMembers = pgTable("composite_workflow_sessi
   canManageAssignments: boolean("can_manage_assignments").notNull().default(false),
   canManageSharing: boolean("can_manage_sharing").notNull().default(false),
   canEditIntel: boolean("can_edit_intel").notNull().default(false),
+  canChat: boolean("can_chat").notNull().default(false),
   allowLaneDelegation: boolean("allow_lane_delegation").notNull().default(false),
   laneColor: text("lane_color").notNull().default("#84cc16"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -76,6 +77,7 @@ export const compositeWorkflowSessionSteps = pgTable("composite_workflow_session
   stepId: integer("step_id").notNull().references(() => steps.id, { onDelete: "cascade" }),
   isCompleted: boolean("is_completed").notNull().default(false),
   completedAt: timestamp("completed_at"),
+  completedByUserId: varchar("completed_by_user_id").references(() => users.id),
 });
 
 export const compositeWorkflowSessionAssignments = pgTable("composite_workflow_session_assignments", {
@@ -84,6 +86,22 @@ export const compositeWorkflowSessionAssignments = pgTable("composite_workflow_s
   stepId: integer("step_id").notNull().references(() => steps.id, { onDelete: "cascade" }),
   assigneeUserId: varchar("assignee_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   allowDelegation: boolean("allow_delegation").notNull().default(false),
+  allowDelegationToEveryone: boolean("allow_delegation_to_everyone").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const compositeWorkflowSessionAssignmentDelegates = pgTable("composite_workflow_session_assignment_delegates", {
+  id: serial("id").primaryKey(),
+  assignmentId: integer("assignment_id").notNull().references(() => compositeWorkflowSessionAssignments.id, { onDelete: "cascade" }),
+  delegateUserId: varchar("delegate_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const compositeWorkflowSessionLaneDelegates = pgTable("composite_workflow_session_lane_delegates", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => compositeWorkflowSessions.id, { onDelete: "cascade" }),
+  ownerUserId: varchar("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  delegateUserId: varchar("delegate_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -99,6 +117,21 @@ export const compositeWorkflowSessionIntelDocs = pgTable("composite_workflow_ses
   mimeType: text("mime_type"),
   fileSize: integer("file_size"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const compositeWorkflowSessionMessages = pgTable("composite_workflow_session_messages", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => compositeWorkflowSessions.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const compositeWorkflowSessionMessageReads = pgTable("composite_workflow_session_message_reads", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull().references(() => compositeWorkflowSessionMessages.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  readAt: timestamp("read_at").notNull().defaultNow(),
 });
 
 export const compositeWorkflowCopies = pgTable("composite_workflow_copies", {
@@ -253,9 +286,29 @@ export const insertCompositeWorkflowSessionAssignmentSchema = createInsertSchema
   createdAt: true,
 });
 
+export const insertCompositeWorkflowSessionAssignmentDelegateSchema = createInsertSchema(compositeWorkflowSessionAssignmentDelegates).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCompositeWorkflowSessionLaneDelegateSchema = createInsertSchema(compositeWorkflowSessionLaneDelegates).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertCompositeWorkflowSessionIntelDocSchema = createInsertSchema(compositeWorkflowSessionIntelDocs).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertCompositeWorkflowSessionMessageSchema = createInsertSchema(compositeWorkflowSessionMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCompositeWorkflowSessionMessageReadSchema = createInsertSchema(compositeWorkflowSessionMessageReads).omit({
+  id: true,
+  readAt: true,
 });
 
 export const insertCompositeWorkflowCopySchema = createInsertSchema(compositeWorkflowCopies).omit({
@@ -287,8 +340,16 @@ export type InsertCompositeWorkflowSessionStep = z.infer<typeof insertCompositeW
 export type CompositeWorkflowSessionStep = typeof compositeWorkflowSessionSteps.$inferSelect;
 export type InsertCompositeWorkflowSessionAssignment = z.infer<typeof insertCompositeWorkflowSessionAssignmentSchema>;
 export type CompositeWorkflowSessionAssignment = typeof compositeWorkflowSessionAssignments.$inferSelect;
+export type InsertCompositeWorkflowSessionAssignmentDelegate = z.infer<typeof insertCompositeWorkflowSessionAssignmentDelegateSchema>;
+export type CompositeWorkflowSessionAssignmentDelegate = typeof compositeWorkflowSessionAssignmentDelegates.$inferSelect;
+export type InsertCompositeWorkflowSessionLaneDelegate = z.infer<typeof insertCompositeWorkflowSessionLaneDelegateSchema>;
+export type CompositeWorkflowSessionLaneDelegate = typeof compositeWorkflowSessionLaneDelegates.$inferSelect;
 export type InsertCompositeWorkflowSessionIntelDoc = z.infer<typeof insertCompositeWorkflowSessionIntelDocSchema>;
 export type CompositeWorkflowSessionIntelDoc = typeof compositeWorkflowSessionIntelDocs.$inferSelect;
+export type InsertCompositeWorkflowSessionMessage = z.infer<typeof insertCompositeWorkflowSessionMessageSchema>;
+export type CompositeWorkflowSessionMessage = typeof compositeWorkflowSessionMessages.$inferSelect;
+export type InsertCompositeWorkflowSessionMessageRead = z.infer<typeof insertCompositeWorkflowSessionMessageReadSchema>;
+export type CompositeWorkflowSessionMessageRead = typeof compositeWorkflowSessionMessageReads.$inferSelect;
 export type InsertCompositeWorkflowCopy = z.infer<typeof insertCompositeWorkflowCopySchema>;
 export type CompositeWorkflowCopy = typeof compositeWorkflowCopies.$inferSelect;
 

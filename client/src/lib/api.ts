@@ -186,6 +186,213 @@ export async function createComposite(name: string, description: string, stepIds
   return res.json();
 }
 
+export async function copyComposite(id: number, payload: { name?: string; description?: string; targetUserId?: string }): Promise<CompositeWorkflow> {
+  const res = await fetch(`/api/composites/${id}/copy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to copy composite");
+  return res.json();
+}
+
+export async function createCompositeSession(payload: { compositeId: number; name?: string; laneColor?: string }) {
+  const res = await fetch("/api/composite-sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to create session");
+  return res.json();
+}
+
+export async function getCompositeSessions() {
+  const res = await fetch("/api/composite-sessions");
+  if (!res.ok) throw new Error("Failed to fetch sessions");
+  return res.json();
+}
+
+export async function getCompositeSession(id: number) {
+  const res = await fetch(`/api/composite-sessions/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch session");
+  return res.json();
+}
+
+export async function deleteCompositeSession(id: number): Promise<void> {
+  const res = await fetch(`/api/composite-sessions/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete session");
+}
+
+export async function addCompositeSessionMember(sessionId: number, payload: any) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to add session member");
+  return res.json();
+}
+
+export async function updateCompositeSessionMember(sessionId: number, memberId: number, payload: any) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/members/${memberId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update session member");
+  return res.json();
+}
+
+export async function deleteCompositeSessionMember(sessionId: number, memberId: number): Promise<void> {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/members/${memberId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to remove session member");
+}
+
+export async function assignCompositeSessionStep(
+  sessionId: number,
+  payload: { stepId: number; assigneeUserId: string; allowDelegation?: boolean; allowDelegationToEveryone?: boolean }
+) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/assignments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to assign step");
+  return res.json();
+}
+
+export async function removeCompositeSessionAssignment(sessionId: number, assignmentId: number): Promise<void> {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/assignments/${assignmentId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to remove assignment");
+}
+
+export async function updateCompositeSessionAssignment(sessionId: number, assignmentId: number, payload: any) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/assignments/${assignmentId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update assignment");
+  return res.json();
+}
+
+export async function addCompositeSessionAssignmentDelegate(sessionId: number, assignmentId: number, userId: string) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/assignments/${assignmentId}/delegates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) throw new Error("Failed to add assignment delegate");
+  return res.json();
+}
+
+export async function removeCompositeSessionAssignmentDelegate(sessionId: number, assignmentId: number, delegateId: number): Promise<void> {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/assignments/${assignmentId}/delegates/${delegateId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to remove assignment delegate");
+}
+
+export async function addCompositeSessionLaneDelegate(sessionId: number, ownerUserId: string, userId: string) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/lane-delegates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerUserId, userId }),
+  });
+  if (!res.ok) throw new Error("Failed to add lane delegate");
+  return res.json();
+}
+
+export async function removeCompositeSessionLaneDelegate(sessionId: number, delegateId: number): Promise<void> {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/lane-delegates/${delegateId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to remove lane delegate");
+}
+
+export async function updateCompositeSessionStep(sessionId: number, sessionStepId: number, payload: any) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/steps/${sessionStepId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update session step");
+  return res.json();
+}
+
+export async function updateCompositeSessionStepContent(sessionId: number, sessionStepId: number, payload: any) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/steps/${sessionStepId}/content`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update step content");
+  return res.json();
+}
+
+export async function getCompositeSessionIntel(sessionId: number) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/intel`);
+  if (!res.ok) throw new Error("Failed to fetch session intel");
+  return res.json();
+}
+
+export async function addCompositeSessionIntel(sessionId: number, payload: any) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/intel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to add session intel");
+  return res.json();
+}
+
+export async function uploadCompositeSessionIntel(sessionId: number, data: { stepId: number; title: string; docType: string; file: File }) {
+  const form = new FormData();
+  form.append("stepId", String(data.stepId));
+  form.append("title", data.title);
+  form.append("docType", data.docType);
+  form.append("file", data.file);
+  const res = await fetch(`/api/composite-sessions/${sessionId}/intel/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error("Failed to upload session intel");
+  return res.json();
+}
+
+export async function deleteCompositeSessionIntel(sessionId: number, docId: number): Promise<void> {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/intel/${docId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete session intel");
+}
+
+export async function getCompositeSessionMessages(sessionId: number) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/messages`);
+  if (!res.ok) throw new Error("Failed to fetch session messages");
+  return res.json();
+}
+
+export async function sendCompositeSessionMessage(sessionId: number, content: string) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) throw new Error("Failed to send session message");
+  return res.json();
+}
+
+export async function markCompositeSessionMessagesRead(sessionId: number, messageIds: number[]) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/messages/read`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messageIds }),
+  });
+  if (!res.ok) throw new Error("Failed to mark messages read");
+  return res.json();
+}
+
+export async function deleteCompositeSessionMessage(sessionId: number, messageId: number): Promise<void> {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/messages/${messageId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete message");
+}
 export async function deleteComposite(id: number): Promise<void> {
   const res = await fetch(`/api/composites/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete composite");

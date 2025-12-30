@@ -1,16 +1,26 @@
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getComposites, getWorkflows, createComposite, deleteComposite, getWorkflowSteps } from "@/lib/api";
+import {
+  getComposites,
+  getWorkflows,
+  createComposite,
+  deleteComposite,
+  getWorkflowSteps,
+  copyComposite,
+  createCompositeSession,
+  addCompositeSessionMember,
+  searchUsers,
+  getCompositeSessions,
+} from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
   Plus,
   Loader2,
   Layers,
+  Users,
   Trash2,
-  ArrowRight,
   X,
-  Check,
   Target,
   Zap
 } from "lucide-react";
@@ -18,6 +28,303 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Workflow, CompositeWorkflowWithItems, Step } from "@shared/schema";
+
+type ShareUser = { id: string; email: string | null; firstName: string | null; lastName: string | null };
+type CompositeSessionSummary = {
+  id: number;
+  name: string | null;
+  compositeId: number;
+  ownerId: string | null;
+  createdAt: string;
+  composite?: { id: number; name: string | null } | null;
+};
+
+function ShareCompositeModal({
+  composite,
+  onClose,
+  onSessionCreated,
+}: {
+  composite: CompositeWorkflowWithItems;
+  onClose: () => void;
+  onSessionCreated: (sessionId: number) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [mode, setMode] = useState<"copy" | "session">("copy");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<ShareUser[]>([]);
+  const [copyName, setCopyName] = useState("");
+  const [copyDescription, setCopyDescription] = useState("");
+  const [sessionName, setSessionName] = useState("");
+  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [permissions, setPermissions] = useState({
+    canEditSteps: false,
+    canManageAssignments: false,
+    canManageSharing: false,
+    canEditIntel: false,
+    allowLaneDelegation: false,
+  });
+  const [laneColor, setLaneColor] = useState("#38bdf8");
+
+  const { data: searchResults } = useQuery({
+    queryKey: ["user-search", searchQuery],
+    queryFn: () => searchUsers(searchQuery),
+    enabled: searchQuery.length >= 2,
+  });
+
+  const copyMutation = useMutation({
+    mutationFn: async () => {
+      for (const user of selectedUsers) {
+        await copyComposite(composite.id, {
+          targetUserId: user.id,
+          name: copyName || `${composite.name} (Copy)`,
+          description: copyDescription || composite.description || "",
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["composites"] });
+      queryClient.invalidateQueries({ queryKey: ["composite-sessions"] });
+      toast.success("Workflow copy shared.");
+      setSelectedUsers([]);
+      onClose();
+    },
+    onError: () => {
+      toast.error("Failed to share workflow copy.");
+    },
+  });
+
+  const sessionMutation = useMutation({
+    mutationFn: () => createCompositeSession({ compositeId: composite.id, name: sessionName || `${composite.name} Session` }),
+    onSuccess: (session) => {
+      queryClient.invalidateQueries({ queryKey: ["composite-sessions"] });
+      setSessionId(session.id);
+    },
+    onError: () => {
+      toast.error("Failed to create live session.");
+    },
+  });
+
+  const addMemberMutation = useMutation({
+    mutationFn: async (userIds: string[]) => {
+      await Promise.all(
+        userIds.map((userId) =>
+          addCompositeSessionMember(sessionId!, {
+            userId,
+            ...permissions,
+            laneColor,
+          })
+        )
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["composite-session", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["composite-sessions"] });
+      toast.success("Session members added.");
+      setSelectedUsers([]);
+    },
+    onError: () => {
+      toast.error("Failed to add session members.");
+    },
+  });
+
+  const toggleUser = (user: ShareUser) => {
+    setSelectedUsers((prev) =>
+      prev.some((u) => u.id === user.id) ? prev.filter((u) => u.id !== user.id) : [...prev, user]
+    );
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/80 backdrop-blur-xl flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-zinc-950 border border-white/5 w-full max-w-4xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6 border-b border-white/5 flex items-center justify-between">
+          <div>
+            <h2 className="font-display text-2xl text-white tracking-widest uppercase">Share Protocol</h2>
+            <p className="text-white/40 text-xs font-mono mt-1 uppercase tracking-widest">{composite.name}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-white/20 hover:text-white">
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+
+        <div className="p-6 border-b border-white/5 flex gap-2">
+          <button
+            onClick={() => setMode("copy")}
+            className={`px-4 py-2 text-xs font-mono uppercase tracking-widest border ${mode === "copy"
+                ? "border-primary/60 text-primary bg-primary/10"
+                : "border-white/10 text-white/50 hover:border-white/30"
+              }`}
+          >
+            Share Copy
+          </button>
+          <button
+            onClick={() => setMode("session")}
+            className={`px-4 py-2 text-xs font-mono uppercase tracking-widest border ${mode === "session"
+                ? "border-primary/60 text-primary bg-primary/10"
+                : "border-white/10 text-white/50 hover:border-white/30"
+              }`}
+          >
+            Live Session
+          </button>
+        </div>
+
+        <div className="p-6 grid md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Search users</label>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by email..."
+              className="w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
+            />
+            <div className="space-y-2 max-h-56 overflow-y-auto">
+              {searchResults?.map((user) => (
+                <button
+                  key={user.id}
+                  onClick={() => toggleUser(user)}
+                  className={`w-full text-left px-3 py-2 border text-xs transition-all ${selectedUsers.some((u) => u.id === user.id)
+                      ? "border-primary/40 bg-primary/10 text-white"
+                      : "border-white/10 text-white/60 hover:border-white/30"
+                    }`}
+                >
+                  {user.email || user.firstName || user.id}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {mode === "copy" ? (
+              <>
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Copy name</label>
+                <input
+                  value={copyName}
+                  onChange={(e) => setCopyName(e.target.value)}
+                  placeholder={`${composite.name} (Copy)`}
+                  className="w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
+                />
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Copy description</label>
+                <input
+                  value={copyDescription}
+                  onChange={(e) => setCopyDescription(e.target.value)}
+                  placeholder={composite.description || "Shared protocol copy"}
+                  className="w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
+                />
+                <Button
+                  onClick={() => copyMutation.mutate()}
+                  disabled={selectedUsers.length === 0 || copyMutation.isPending}
+                  className="w-full bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
+                >
+                  {copyMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send Copy"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Session name</label>
+                <input
+                  value={sessionName}
+                  onChange={(e) => setSessionName(e.target.value)}
+                  placeholder={`${composite.name} Session`}
+                  className="w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
+                />
+                <div className="grid grid-cols-2 gap-3 text-[10px] font-mono text-white/50 uppercase tracking-widest">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={permissions.canEditSteps}
+                      onChange={(e) => setPermissions((prev) => ({ ...prev, canEditSteps: e.target.checked }))}
+                    />
+                    Edit Steps
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={permissions.canManageAssignments}
+                      onChange={(e) => setPermissions((prev) => ({ ...prev, canManageAssignments: e.target.checked }))}
+                    />
+                    Manage Assignments
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={permissions.canManageSharing}
+                      onChange={(e) => setPermissions((prev) => ({ ...prev, canManageSharing: e.target.checked }))}
+                    />
+                    Manage Sharing
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={permissions.canEditIntel}
+                      onChange={(e) => setPermissions((prev) => ({ ...prev, canEditIntel: e.target.checked }))}
+                    />
+                    Edit Intel
+                  </label>
+                  <label className="flex items-center gap-2 col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={permissions.allowLaneDelegation}
+                      onChange={(e) => setPermissions((prev) => ({ ...prev, allowLaneDelegation: e.target.checked }))}
+                    />
+                    Allow Lane Delegation
+                  </label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Lane Color</span>
+                  <input
+                    type="color"
+                    value={laneColor}
+                    onChange={(e) => setLaneColor(e.target.value)}
+                    className="h-8 w-12 bg-transparent border border-white/10"
+                  />
+                </div>
+                {!sessionId ? (
+                  <Button
+                    onClick={() => sessionMutation.mutate()}
+                    disabled={sessionMutation.isPending}
+                    className="w-full bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
+                  >
+                    {sessionMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Session"}
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      onClick={() => {
+                        if (selectedUsers.length === 0) return;
+                        addMemberMutation.mutate(selectedUsers.map((user) => user.id));
+                      }}
+                      disabled={selectedUsers.length === 0 || addMemberMutation.isPending}
+                      className="w-full bg-primary/20 hover:bg-primary/30 text-primary font-mono uppercase tracking-widest"
+                    >
+                      Add Member
+                    </Button>
+                    <Button
+                      onClick={() => onSessionCreated(sessionId)}
+                      className="w-full bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
+                    >
+                      Open Session
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
 
 function CreateCompositeModal({
   workflows,
@@ -255,10 +562,16 @@ export default function CompositesPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [shareComposite, setShareComposite] = useState<CompositeWorkflowWithItems | null>(null);
 
   const { data: composites, isLoading: compositesLoading } = useQuery<CompositeWorkflowWithItems[]>({
     queryKey: ["composites"],
     queryFn: getComposites,
+  });
+
+  const { data: sessions } = useQuery<CompositeSessionSummary[]>({
+    queryKey: ["composite-sessions"],
+    queryFn: getCompositeSessions,
   });
 
   const { data: workflows } = useQuery({
@@ -287,14 +600,25 @@ export default function CompositesPage() {
           Mission Control
         </Button>
 
-        <Button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider text-xs"
-          data-testid="button-create-composite"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Combine Workflows
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/composite-sessions")}
+            className="text-white/60 hover:text-white border border-white/10"
+          >
+            <Users className="w-4 h-4 mr-2" />
+            Sessions
+          </Button>
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider text-xs"
+            data-testid="button-create-composite"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Combine Workflows
+          </Button>
+        </div>
       </header>
 
       <div className="container mx-auto max-w-4xl py-12 px-4">
@@ -313,6 +637,39 @@ export default function CompositesPage() {
             </div>
           </div>
         </motion.div>
+
+        {sessions && sessions.length > 0 && (
+          <div className="mb-12">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-mono uppercase tracking-widest text-white/60">Live Sessions</h2>
+                <p className="text-white/30 text-xs">Active collaborations across composite protocols</p>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {sessions.map((session) => (
+                <button
+                  key={session.id}
+                  onClick={() => navigate(`/composite-sessions/${session.id}`)}
+                  className="border border-white/10 bg-black/40 p-4 text-left hover:border-primary/40 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-mono text-white/40 uppercase tracking-widest">Session</span>
+                    <span className="text-[10px] text-white/30">
+                      {new Date(session.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <h3 className="text-white text-lg font-display">
+                    {session.name || session.composite?.name || "Untitled Session"}
+                  </h3>
+                  <p className="text-xs text-white/40 mt-1">
+                    {session.composite?.name || "Composite Protocol"}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {compositesLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -367,18 +724,31 @@ export default function CompositesPage() {
                           <p className="text-white/40 text-sm mt-1 line-clamp-1 italic">{composite.description}</p>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteMutation.mutate(composite.id);
-                        }}
-                        className="text-red-400/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                        data-testid={`button-delete-${composite.id}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShareComposite(composite);
+                          }}
+                          className="text-white/30 hover:text-primary hover:bg-primary/10 transition-all"
+                        >
+                          <Users className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteMutation.mutate(composite.id);
+                          }}
+                          className="text-red-400/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                          data-testid={`button-delete-${composite.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="space-y-6">
@@ -441,6 +811,19 @@ export default function CompositesPage() {
             onClose={() => setShowCreateModal(false)}
             onSuccess={() => {
               queryClient.invalidateQueries({ queryKey: ["composites"] });
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {shareComposite && (
+          <ShareCompositeModal
+            composite={shareComposite}
+            onClose={() => setShareComposite(null)}
+            onSessionCreated={(sessionId) => {
+              setShareComposite(null);
+              navigate(`/composite-sessions/${sessionId}`);
             }}
           />
         )}
