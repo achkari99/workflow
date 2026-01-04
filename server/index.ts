@@ -71,7 +71,7 @@ app.use((req, res, next) => {
   }
 
   await setupAuth(app);
-  await registerRoutes(httpServer, app);
+  await registerRoutes(app);
   setupRealtime(httpServer);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

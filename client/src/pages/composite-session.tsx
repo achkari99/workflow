@@ -487,9 +487,9 @@ export default function CompositeSessionPage() {
         userId: user?.id || "me",
         content,
         createdAt: new Date(),
-          user: currentMember?.user || (user ? { id: user.id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName, profileImageUrl: user.profileImageUrl } : null),
-          reads: [],
-        };
+        user: currentMember?.user || user || null,
+        reads: [],
+      };
       queryClient.setQueryData(["composite-session-messages", sessionId], [...previous, optimistic]);
       setChatInput("");
       return { previous, tempId };
@@ -592,59 +592,59 @@ export default function CompositeSessionPage() {
   return (
     <div className="min-h-screen bg-black text-foreground flex flex-col">
       <header className="h-16 border-b border-white/5 bg-black/60 flex items-center justify-between px-6">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(`/sessions`)}
-              className="text-white/40 hover:text-white"
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Back to Sessions
-            </Button>
-            <div>
-              <div className="flex items-center gap-2 text-[10px] font-mono text-white/40 uppercase tracking-widest">
-                <Users className="w-3 h-3" />
-                Session
-              </div>
-              <div className="text-white font-display text-sm">{session.name || session.composite.name}</div>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/sessions`)}
+            className="text-white/40 hover:text-white"
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Back to Sessions
+          </Button>
+          <div>
+            <div className="flex items-center gap-2 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+              <Users className="w-3 h-3" />
+              Session
             </div>
+            <div className="text-white font-display text-sm">{session.name || session.composite.name}</div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveCenterView("chat")}
-              className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest border ${activeCenterView === "chat" ? "border-primary/60 text-primary bg-primary/10" : "border-white/10 text-white/40 hover:text-white"
-                }`}
-            >
-              Chat
-            </button>
-            <button
-              onClick={() => setActiveCenterView("submission")}
-              className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest border ${activeCenterView === "submission" ? "border-primary/60 text-primary bg-primary/10" : "border-white/10 text-white/40 hover:text-white"
-                }`}
-            >
-              Submission
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            {session.members.map((member) => (
-              <div key={member.id} className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: member.laneColor }} />
-                <span className="text-[10px] text-white/40 font-mono uppercase">
-                  {getDisplayName(member)}
-                </span>
-              </div>
-            ))}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(`/sessions/${session.id}/manage`)}
-              className="text-white/50 hover:text-primary"
-            >
-              Manage
-            </Button>
-          </div>
-        </header>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveCenterView("chat")}
+            className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest border ${activeCenterView === "chat" ? "border-primary/60 text-primary bg-primary/10" : "border-white/10 text-white/40 hover:text-white"
+              }`}
+          >
+            Chat
+          </button>
+          <button
+            onClick={() => setActiveCenterView("submission")}
+            className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest border ${activeCenterView === "submission" ? "border-primary/60 text-primary bg-primary/10" : "border-white/10 text-white/40 hover:text-white"
+              }`}
+          >
+            Submission
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          {session.members.map((member) => (
+            <div key={member.id} className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: member.laneColor }} />
+              <span className="text-[10px] text-white/40 font-mono uppercase">
+                {getDisplayName(member)}
+              </span>
+            </div>
+          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/sessions/${session.id}/manage`)}
+            className="text-white/50 hover:text-primary"
+          >
+            Manage
+          </Button>
+        </div>
+      </header>
 
       <div className="flex-1 grid grid-cols-[300px_1fr_340px]">
         <aside className="border-r border-white/5 bg-black/60 overflow-y-auto">
@@ -732,8 +732,8 @@ export default function CompositeSessionPage() {
                     onClick={() => toggleLaneDelegationMutation.mutate()}
                     className="text-[10px] text-white/40 hover:text-primary"
                   >
-                      {currentMember.allowLaneDelegation ? "Lane Opened" : "Open My Lane"}
-                    </Button>
+                    {currentMember.allowLaneDelegation ? "Lane Opened" : "Open My Lane"}
+                  </Button>
                 )}
                 {selectedStep && canEditSteps && (
                   <Button
@@ -748,25 +748,25 @@ export default function CompositeSessionPage() {
                 )}
               </div>
             </div>
-              <div className="mt-3 flex items-start justify-between gap-6">
-                <h1 className="text-2xl font-display text-white">{selectedStep ? selectedStep.name : "Select a phase"}</h1>
-                {(selectedStep?.description || (selectedSessionStep?.isCompleted && completedByMember)) && (
-                  <div className="text-right max-w-xs">
-                    {selectedStep?.description && (
-                      <p className="text-white/50 text-sm">{selectedStep.description}</p>
-                    )}
-                    {selectedSessionStep?.isCompleted && completedByMember && (
-                      <div className="mt-2 flex items-center justify-end gap-2 text-xs text-white/50 font-mono uppercase tracking-widest">
-                        <span>Completed by</span>
-                        <span className="flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: completedByMember.laneColor }} />
-                          {getDisplayName(completedByMember)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+            <div className="mt-3 flex items-start justify-between gap-6">
+              <h1 className="text-2xl font-display text-white">{selectedStep ? selectedStep.name : "Select a phase"}</h1>
+              {(selectedStep?.description || (selectedSessionStep?.isCompleted && completedByMember)) && (
+                <div className="text-right max-w-xs">
+                  {selectedStep?.description && (
+                    <p className="text-white/50 text-sm">{selectedStep.description}</p>
+                  )}
+                  {selectedSessionStep?.isCompleted && completedByMember && (
+                    <div className="mt-2 flex items-center justify-end gap-2 text-xs text-white/50 font-mono uppercase tracking-widest">
+                      <span>Completed by</span>
+                      <span className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: completedByMember.laneColor }} />
+                        {getDisplayName(completedByMember)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="p-8">
@@ -783,76 +783,76 @@ export default function CompositeSessionPage() {
                     </div>
                   ) : (
                     messages.map((message) => {
-                        const isOwn = message.userId === user?.id;
-                        const author = message.user;
-                        const authorName = author ? (author.firstName || author.username || author.email || message.userId) : message.userId;
-                        const authorId = author?.id || message.userId;
-                        const authorInitials = (authorName || "U").slice(0, 1).toUpperCase();
-                        const authorAvatar = author?.profileImageUrl || "";
-                        const readBy = (message.reads || [])
-                          .filter((read) => read.userId !== message.userId && read.userId !== user?.id)
-                          .map((read) => read.user?.firstName || read.user?.username || read.user?.email || read.userId);
-                        const maxSeen = 3;
-                        const seenNames = readBy.slice(0, maxSeen);
-                        const seenLabel = isOwn && readBy.length > 0
-                          ? `Seen by ${seenNames.join(", ")}${readBy.length > maxSeen ? ` +${readBy.length - maxSeen}` : ""}`
-                          : null;
-                        return (
-                          <div key={message.id} className={`flex items-start gap-3 ${isOwn ? "justify-end" : "justify-start"}`}>
-                            {!isOwn && (
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/profile/${authorId}`)}
-                                className="h-9 w-9 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-xs font-mono text-white/60 overflow-hidden"
-                                aria-label={`View ${authorName} profile`}
-                              >
-                                {authorAvatar ? (
-                                  <img src={authorAvatar} alt={authorName} className="h-full w-full object-cover" />
-                                ) : (
-                                  authorInitials
-                                )}
-                              </button>
-                            )}
-                            <div className={`max-w-[70%] border px-4 py-3 ${isOwn ? "border-primary/40 bg-primary/10 text-white" : "border-white/10 bg-white/5 text-white/80"}`}>
-                              <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-white/40 uppercase tracking-widest">
-                                <span>{authorName}</span>
-                                <div className="flex items-center gap-2">
-                                  <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                                  {(isOwn || isOwner) && (
-                                    <button
-                                      onClick={() => deleteMessageMutation.mutate(message.id)}
-                                      className="text-white/40 hover:text-red-400"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                              <p className="mt-2 text-sm whitespace-pre-wrap">{message.content}</p>
-                              {seenLabel && (
-                                <p className="mt-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
-                                  {seenLabel}
-                                </p>
+                      const isOwn = message.userId === user?.id;
+                      const author = message.user;
+                      const authorName = author ? (author.firstName || author.username || author.email || message.userId) : message.userId;
+                      const authorId = author?.id || message.userId;
+                      const authorInitials = (authorName || "U").slice(0, 1).toUpperCase();
+                      const authorAvatar = (author as any)?.profileImageUrl || "";
+                      const readBy = (message.reads || [])
+                        .filter((read) => read.userId !== message.userId && read.userId !== user?.id)
+                        .map((read) => read.user?.firstName || read.user?.username || read.user?.email || read.userId);
+                      const maxSeen = 3;
+                      const seenNames = readBy.slice(0, maxSeen);
+                      const seenLabel = isOwn && readBy.length > 0
+                        ? `Seen by ${seenNames.join(", ")}${readBy.length > maxSeen ? ` +${readBy.length - maxSeen}` : ""}`
+                        : null;
+                      return (
+                        <div key={message.id} className={`flex items-start gap-3 ${isOwn ? "justify-end" : "justify-start"}`}>
+                          {!isOwn && (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/profile/${authorId}`)}
+                              className="h-9 w-9 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-xs font-mono text-white/60 overflow-hidden"
+                              aria-label={`View ${authorName} profile`}
+                            >
+                              {authorAvatar ? (
+                                <img src={authorAvatar} alt={authorName} className="h-full w-full object-cover" />
+                              ) : (
+                                authorInitials
                               )}
-                            </div>
-                            {isOwn && (
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/profile/${authorId}`)}
-                                className="h-9 w-9 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-xs font-mono text-white/60 overflow-hidden"
-                                aria-label={`View ${authorName} profile`}
-                              >
-                                {authorAvatar ? (
-                                  <img src={authorAvatar} alt={authorName} className="h-full w-full object-cover" />
-                                ) : (
-                                  authorInitials
+                            </button>
+                          )}
+                          <div className={`max-w-[70%] border px-4 py-3 ${isOwn ? "border-primary/40 bg-primary/10 text-white" : "border-white/10 bg-white/5 text-white/80"}`}>
+                            <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                              <span>{authorName}</span>
+                              <div className="flex items-center gap-2">
+                                <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                {(isOwn || isOwner) && (
+                                  <button
+                                    onClick={() => deleteMessageMutation.mutate(message.id)}
+                                    className="text-white/40 hover:text-red-400"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
                                 )}
-                              </button>
+                              </div>
+                            </div>
+                            <p className="mt-2 text-sm whitespace-pre-wrap">{message.content}</p>
+                            {seenLabel && (
+                              <p className="mt-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
+                                {seenLabel}
+                              </p>
                             )}
                           </div>
-                        );
-                      })
-                    )}
+                          {isOwn && (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/profile/${authorId}`)}
+                              className="h-9 w-9 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-xs font-mono text-white/60 overflow-hidden"
+                              aria-label={`View ${authorName} profile`}
+                            >
+                              {authorAvatar ? (
+                                <img src={authorAvatar} alt={authorName} className="h-full w-full object-cover" />
+                              ) : (
+                                authorInitials
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
                 <div className="border-t border-white/5 p-4 flex items-center gap-3 relative">
                   <div className="relative">
