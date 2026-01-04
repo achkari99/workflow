@@ -5,7 +5,7 @@ import { AmbientBackground } from "@/components/ui/ambient-background";
 import bgTexture from "@assets/generated_images/subtle_dark_digital_noise_texture_with_faint_grid_overlay.png";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getActiveWorkflow, getWorkflows, advanceWorkflow } from "@/lib/api";
-import { Loader2, Plus, List, Layers, LogIn, LogOut, User } from "lucide-react";
+import { Loader2, Plus, List, Layers, Users, LogIn, LogOut, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -94,26 +94,36 @@ export default function MissionControl() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/composites")}
+              onClick={() => navigate("/workflows")}
               className="text-white/50 hover:text-white hover:bg-white/5"
               data-testid="button-composites"
             >
               <Layers className="w-4 h-4 mr-2" />
-              Composites
+              Workflows
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/workflows")}
+              onClick={() => navigate("/sessions")}
+              className="text-white/50 hover:text-white hover:bg-white/5"
+              data-testid="button-sessions"
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Sessions
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/missions")}
               className="text-white/50 hover:text-white hover:bg-white/5"
               data-testid="button-all-missions"
             >
               <List className="w-4 h-4 mr-2" />
-              All Missions
+              Missions
             </Button>
             <Button
               size="sm"
-              onClick={() => navigate("/workflows/new")}
+              onClick={() => navigate("/missions/new")}
               className="bg-primary/20 hover:bg-primary/30 text-primary"
               data-testid="button-new-mission"
             >
@@ -121,12 +131,17 @@ export default function MissionControl() {
               New
             </Button>
 
-            {user ? (
+              {user ? (
               <div className="flex items-center gap-2 ml-2 pl-2 border-l border-white/10">
-                <div className="flex items-center gap-2 text-sm text-white/60">
+                <button
+                  type="button"
+                  onClick={() => navigate("/profile")}
+                  className="flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
+                  data-testid="button-profile"
+                >
                   <User className="w-4 h-4" />
                   <span>{user?.firstName || user?.username || user?.email || "User"}</span>
-                </div>
+                </button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -215,9 +230,9 @@ export default function MissionControl() {
                 className="text-center text-muted-foreground max-w-md bg-white/5 border border-white/10 p-8"
               >
                 <p className="text-lg mb-4">No active quest detected.</p>
-                <p className="text-sm mb-6">Create a new workflow to begin your mission.</p>
+                <p className="text-sm mb-6">Create a new mission to begin your journey.</p>
                 <Button
-                  onClick={() => navigate("/workflows/new")}
+                  onClick={() => navigate("/missions/new")}
                   className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider"
                   data-testid="button-create-first-mission"
                 >

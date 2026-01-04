@@ -1,6 +1,6 @@
 import type { Workflow, InsertWorkflow, Step, IntelDoc, Activity, WorkflowWithSteps, StepWithDetails, WorkflowShare, CompositeWorkflow, CompositeWorkflowWithItems } from "@shared/schema";
 
-export async function getActiveWorkflow(): Promise<Workflow | null> {
+export async function getActiveWorkflow(): Promise<WorkflowWithSteps | null> {
   const res = await fetch("/api/workflows/active");
   if (res.status === 404) {
     return null;
@@ -9,7 +9,7 @@ export async function getActiveWorkflow(): Promise<Workflow | null> {
   return res.json();
 }
 
-export async function getWorkflows(): Promise<Workflow[]> {
+export async function getWorkflows(): Promise<WorkflowWithSteps[]> {
   const res = await fetch("/api/workflows");
   if (!res.ok) throw new Error("Failed to fetch workflows");
   return res.json();
@@ -31,7 +31,11 @@ export async function advanceWorkflow(id: number, stepId?: number): Promise<Work
   return res.json();
 }
 
-export async function createWorkflow(workflow: InsertWorkflow): Promise<Workflow> {
+export async function createWorkflow(
+  workflow: InsertWorkflow & {
+    proofConfig?: { proofRequired?: boolean; proofTitle?: string; proofDescription?: string }[];
+  }
+): Promise<Workflow> {
   const res = await fetch("/api/workflows", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -161,6 +165,28 @@ export async function removeShare(shareId: number): Promise<void> {
 export async function searchUsers(query: string): Promise<{ id: string; email: string | null; firstName: string | null; lastName: string | null }[]> {
   const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
   if (!res.ok) throw new Error("Failed to search users");
+  return res.json();
+}
+
+export async function updateUserProfile(payload: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  username?: string | null;
+  profileImageUrl?: string | null;
+}) {
+  const res = await fetch("/api/user", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update profile");
+  return res.json();
+}
+
+export async function getUserProfile(userId: string) {
+  const res = await fetch(`/api/users/${userId}`);
+  if (!res.ok) throw new Error("Failed to fetch profile");
   return res.json();
 }
 
@@ -361,6 +387,84 @@ export async function uploadCompositeSessionIntel(sessionId: number, data: { ste
 export async function deleteCompositeSessionIntel(sessionId: number, docId: number): Promise<void> {
   const res = await fetch(`/api/composite-sessions/${sessionId}/intel/${docId}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete session intel");
+}
+
+export async function updateStepProofConfig(stepId: number, payload: { proofRequired?: boolean; proofTitle?: string | null; proofDescription?: string | null }) {
+  const res = await fetch(`/api/steps/${stepId}/proof-config`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update proof config");
+  return res.json();
+}
+
+export async function submitStepProof(stepId: number, payload: { content?: string }) {
+  const res = await fetch(`/api/steps/${stepId}/proof`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to submit proof");
+  return res.json();
+}
+
+export async function uploadStepProof(stepId: number, data: { content?: string; file: File }) {
+  const form = new FormData();
+  if (data.content !== undefined) {
+    form.append("content", data.content);
+  }
+  form.append("file", data.file);
+  const res = await fetch(`/api/steps/${stepId}/proof/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error("Failed to upload proof");
+  return res.json();
+}
+
+export async function deleteStepProof(stepId: number): Promise<void> {
+  const res = await fetch(`/api/steps/${stepId}/proof`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete proof");
+}
+
+export async function updateSessionProofConfig(sessionId: number, sessionStepId: number, payload: { proofRequired?: boolean; proofTitle?: string | null; proofDescription?: string | null }) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/steps/${sessionStepId}/proof-config`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update session proof config");
+  return res.json();
+}
+
+export async function submitSessionProof(sessionId: number, sessionStepId: number, payload: { content?: string }) {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/steps/${sessionStepId}/proof`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to submit session proof");
+  return res.json();
+}
+
+export async function uploadSessionProof(sessionId: number, sessionStepId: number, data: { content?: string; file: File }) {
+  const form = new FormData();
+  if (data.content !== undefined) {
+    form.append("content", data.content);
+  }
+  form.append("file", data.file);
+  const res = await fetch(`/api/composite-sessions/${sessionId}/steps/${sessionStepId}/proof/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error("Failed to upload session proof");
+  return res.json();
+}
+
+export async function deleteSessionProof(sessionId: number, sessionStepId: number): Promise<void> {
+  const res = await fetch(`/api/composite-sessions/${sessionId}/steps/${sessionStepId}/proof`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete session proof");
 }
 
 export async function getCompositeSessionMessages(sessionId: number) {

@@ -51,6 +51,30 @@ async function attachSignedUrls(docs: any[]) {
   }));
 }
 
+async function attachProofUrl<T extends { proofFilePath?: string | null }>(item: T) {
+  if (!item.proofFilePath) return { ...item, proofFileUrl: null };
+  const { data } = await supabase.storage.from("intel-docs").createSignedUrl(item.proofFilePath, 60 * 60);
+  return { ...item, proofFileUrl: data?.signedUrl || null };
+}
+
+async function canEditStepProof(step: any, userId?: string) {
+  if (!userId) return false;
+  if (step.compositeId) {
+    const composite = await storage.getCompositeWorkflowWithItems(step.compositeId);
+    if (!composite) return false;
+    if (composite.ownerId && composite.ownerId !== userId) return false;
+    return true;
+  }
+  if (step.workflowId) {
+    const workflow = await storage.getWorkflow(step.workflowId);
+    if (!workflow) return false;
+    if (!workflow.ownerId || workflow.ownerId === userId) return true;
+    const shares = await storage.getWorkflowShares(step.workflowId);
+    return shares.some((share: any) => share.sharedWithUserId === userId && share.permission === "edit");
+  }
+  return false;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -101,13 +125,19 @@ export async function registerRoutes(
       }
       const workflow = await storage.createWorkflow(validation.data);
 
+      const proofConfig = Array.isArray(req.body.proofConfig) ? req.body.proofConfig : [];
       for (let i = 1; i <= workflow.totalSteps; i++) {
+        const proof = proofConfig[i - 1] || {};
+        const proofRequired = !!proof.proofRequired;
         await storage.createStep({
           workflowId: workflow.id,
           stepNumber: i,
           name: `Step ${i}`,
           description: `Complete phase ${i}`,
           status: i === 1 ? "active" : "locked",
+          proofRequired,
+          proofTitle: proofRequired ? proof.proofTitle || null : null,
+          proofDescription: proofRequired ? proof.proofDescription || null : null,
         });
       }
 
@@ -222,7 +252,8 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Step not found" });
       }
       const intelDocsWithUrls = await attachSignedUrls(step.intelDocs);
-      res.json({ ...step, intelDocs: intelDocsWithUrls });
+      const stepWithProof = await attachProofUrl(step);
+      res.json({ ...stepWithProof, intelDocs: intelDocsWithUrls });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch step" });
     }
@@ -257,11 +288,18 @@ export async function registerRoutes(
   app.post("/api/steps/:id/complete", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const step = await storage.completeStep(id);
+      const step = await storage.getStep(id);
       if (!step) {
         return res.status(404).json({ error: "Step not found" });
       }
-      res.json(step);
+      if (step.proofRequired && !step.proofContent && !step.proofFilePath) {
+        return res.status(400).json({ error: "Proof required before completion" });
+      }
+      const completed = await storage.completeStep(id);
+      if (!completed) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+      res.json(completed);
     } catch (error) {
       res.status(500).json({ error: "Failed to complete step" });
     }
@@ -359,6 +397,158 @@ export async function registerRoutes(
       res.status(201).json(docWithUrl);
     } catch (error) {
       res.status(500).json({ error: "Failed to upload intel doc" });
+    }
+  });
+
+  app.patch("/api/steps/:id/proof-config", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const stepId = parseInt(req.params.id);
+      const step = await storage.getStep(stepId);
+      if (!step) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+      const canEdit = await canEditStepProof(step, userId);
+      if (!canEdit) {
+        return res.status(403).json({ error: "You don't have permission to edit proofs" });
+      }
+      const updatePayload: Record<string, any> = {};
+      for (const key of ["proofRequired", "proofTitle", "proofDescription"]) {
+        if (req.body[key] !== undefined) {
+          updatePayload[key] = req.body[key];
+        }
+      }
+      if (Object.keys(updatePayload).length === 0) {
+        return res.status(400).json({ error: "No updates provided" });
+      }
+      const updated = await storage.updateStep(stepId, updatePayload);
+      if (!updated) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update proof config" });
+    }
+  });
+
+  app.patch("/api/steps/:id/proof", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const stepId = parseInt(req.params.id);
+      const step = await storage.getStep(stepId);
+      if (!step) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+      const canEdit = await canEditStepProof(step, userId);
+      if (!canEdit) {
+        return res.status(403).json({ error: "You don't have permission to edit proofs" });
+      }
+      const updatePayload: Record<string, any> = {};
+      if (req.body.content !== undefined) {
+        updatePayload.proofContent = req.body.content;
+      }
+      updatePayload.proofSubmittedAt = new Date();
+      updatePayload.proofSubmittedByUserId = userId;
+      const updated = await storage.updateStep(stepId, updatePayload);
+      if (!updated) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+      const withUrl = await attachProofUrl(updated);
+      res.json(withUrl);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to submit proof" });
+    }
+  });
+
+  app.post("/api/steps/:id/proof/upload", upload.single("file"), async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const stepId = parseInt(req.params.id);
+      const step = await storage.getStep(stepId);
+      if (!step) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+      const canEdit = await canEditStepProof(step, userId);
+      if (!canEdit) {
+        return res.status(403).json({ error: "You don't have permission to edit proofs" });
+      }
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "File is required" });
+      }
+      const safeName = file.originalname.replace(/[^\w.\-]+/g, "_");
+      const objectPath = `${userId}/proofs/steps/${stepId}/${Date.now()}-${safeName}`;
+      if (step.proofFilePath) {
+        await supabase.storage.from("intel-docs").remove([step.proofFilePath]);
+      }
+      const { error } = await supabase.storage.from("intel-docs").upload(objectPath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
+      if (error) {
+        return res.status(500).json({ error: "Failed to upload proof file", details: error.message });
+      }
+      const updatePayload: Record<string, any> = {
+        proofFilePath: objectPath,
+        proofFileName: file.originalname,
+        proofMimeType: file.mimetype,
+        proofFileSize: file.size,
+        proofSubmittedAt: new Date(),
+        proofSubmittedByUserId: userId,
+      };
+      if (req.body.content !== undefined) {
+        updatePayload.proofContent = req.body.content;
+      }
+      const updated = await storage.updateStep(stepId, updatePayload);
+      if (!updated) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+      const withUrl = await attachProofUrl(updated);
+      res.status(201).json(withUrl);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to upload proof" });
+    }
+  });
+
+  app.delete("/api/steps/:id/proof", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const stepId = parseInt(req.params.id);
+      const step = await storage.getStep(stepId);
+      if (!step) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+      const canEdit = await canEditStepProof(step, userId);
+      if (!canEdit) {
+        return res.status(403).json({ error: "You don't have permission to edit proofs" });
+      }
+      if (step.proofFilePath) {
+        await supabase.storage.from("intel-docs").remove([step.proofFilePath]);
+      }
+      const updated = await storage.updateStep(stepId, {
+        proofContent: null,
+        proofFilePath: null,
+        proofFileName: null,
+        proofMimeType: null,
+        proofFileSize: null,
+        proofSubmittedAt: null,
+        proofSubmittedByUserId: null,
+      });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete proof" });
     }
   });
 
@@ -575,6 +765,16 @@ export async function registerRoutes(
           stepId: step.id,
           isCompleted: false,
           completedAt: null,
+          proofRequired: step.proofRequired || false,
+          proofTitle: step.proofTitle,
+          proofDescription: step.proofDescription,
+          proofContent: step.proofContent,
+          proofFilePath: step.proofFilePath,
+          proofFileName: step.proofFileName,
+          proofMimeType: step.proofMimeType,
+          proofFileSize: step.proofFileSize,
+          proofSubmittedAt: step.proofSubmittedAt,
+          proofSubmittedByUserId: step.proofSubmittedByUserId,
         });
       }
       await storage.addCompositeWorkflowSessionMember({
@@ -584,6 +784,7 @@ export async function registerRoutes(
         canManageAssignments: true,
         canManageSharing: true,
         canEditIntel: true,
+        canEditProof: true,
         canChat: true,
         allowLaneDelegation: false,
         laneColor: req.body.laneColor || "#84cc16",
@@ -625,7 +826,10 @@ export async function registerRoutes(
         return res.status(403).json({ error: "You don't have access to this session" });
       }
       const intelDocsWithUrls = await attachSignedUrls(session.intelDocs || []);
-      res.json({ ...session, intelDocs: intelDocsWithUrls });
+      const sessionStepsWithProof = await Promise.all(
+        (session.sessionSteps || []).map((step: any) => attachProofUrl(step))
+      );
+      res.json({ ...session, intelDocs: intelDocsWithUrls, sessionSteps: sessionStepsWithProof });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch session" });
     }
@@ -677,6 +881,7 @@ export async function registerRoutes(
         canManageAssignments: !!req.body.canManageAssignments,
         canManageSharing: !!req.body.canManageSharing,
         canEditIntel: !!req.body.canEditIntel,
+        canEditProof: !!req.body.canEditProof,
         canChat: !!req.body.canChat,
         allowLaneDelegation: !!req.body.allowLaneDelegation,
         laneColor: req.body.laneColor || "#38bdf8",
@@ -1036,6 +1241,9 @@ export async function registerRoutes(
       const canComplete = canCompleteAsAssignee || canCompleteAsDelegate;
 
       if (req.body.isCompleted && !sessionStep.isCompleted) {
+        if (sessionStep.proofRequired && !sessionStep.proofContent && !sessionStep.proofFilePath) {
+          return res.status(400).json({ error: "Proof required before completion" });
+        }
         if (!canComplete) {
           return res.status(403).json({ error: "You don't have permission to complete this step" });
         }
@@ -1102,6 +1310,183 @@ export async function registerRoutes(
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update step content" });
+    }
+  });
+
+  app.patch("/api/composite-sessions/:id/steps/:sessionStepId/proof-config", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canEditProof")) {
+        return res.status(403).json({ error: "You don't have permission to edit proofs" });
+      }
+      const sessionStepId = parseInt(req.params.sessionStepId);
+      const sessionStep = session.sessionSteps.find((step: any) => step.id === sessionStepId);
+      if (!sessionStep) {
+        return res.status(404).json({ error: "Session step not found" });
+      }
+      const updatePayload: Record<string, any> = {};
+      for (const key of ["proofRequired", "proofTitle", "proofDescription"]) {
+        if (req.body[key] !== undefined) {
+          updatePayload[key] = req.body[key];
+        }
+      }
+      if (Object.keys(updatePayload).length === 0) {
+        return res.status(400).json({ error: "No updates provided" });
+      }
+      const updated = await storage.updateCompositeWorkflowSessionStep(sessionStepId, updatePayload);
+      if (!updated) {
+        return res.status(404).json({ error: "Session step not found" });
+      }
+      const withUrl = await attachProofUrl(updated);
+      broadcastSession(sessionId, { type: "session:proof_config_updated", sessionId, sessionStepId });
+      res.json(withUrl);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update proof config" });
+    }
+  });
+
+  app.patch("/api/composite-sessions/:id/steps/:sessionStepId/proof", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canEditProof")) {
+        return res.status(403).json({ error: "You don't have permission to edit proofs" });
+      }
+      const sessionStepId = parseInt(req.params.sessionStepId);
+      const sessionStep = session.sessionSteps.find((step: any) => step.id === sessionStepId);
+      if (!sessionStep) {
+        return res.status(404).json({ error: "Session step not found" });
+      }
+      const updatePayload: Record<string, any> = {};
+      if (req.body.content !== undefined) {
+        updatePayload.proofContent = req.body.content;
+      }
+      updatePayload.proofSubmittedAt = new Date();
+      updatePayload.proofSubmittedByUserId = userId;
+      const updated = await storage.updateCompositeWorkflowSessionStep(sessionStepId, updatePayload);
+      if (!updated) {
+        return res.status(404).json({ error: "Session step not found" });
+      }
+      const withUrl = await attachProofUrl(updated);
+      broadcastSession(sessionId, { type: "session:proof_submitted", sessionId, sessionStepId });
+      res.json(withUrl);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to submit proof" });
+    }
+  });
+
+  app.post("/api/composite-sessions/:id/steps/:sessionStepId/proof/upload", upload.single("file"), async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canEditProof")) {
+        return res.status(403).json({ error: "You don't have permission to edit proofs" });
+      }
+      const sessionStepId = parseInt(req.params.sessionStepId);
+      const sessionStep = session.sessionSteps.find((step: any) => step.id === sessionStepId);
+      if (!sessionStep) {
+        return res.status(404).json({ error: "Session step not found" });
+      }
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "File is required" });
+      }
+      const safeName = file.originalname.replace(/[^\w.\-]+/g, "_");
+      const objectPath = `${sessionId}/proofs/${sessionStep.stepId}/${Date.now()}-${safeName}`;
+      if (sessionStep.proofFilePath) {
+        await supabase.storage.from("intel-docs").remove([sessionStep.proofFilePath]);
+      }
+      const { error } = await supabase.storage.from("intel-docs").upload(objectPath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
+      if (error) {
+        return res.status(500).json({ error: "Failed to upload proof file", details: error.message });
+      }
+      const updatePayload: Record<string, any> = {
+        proofFilePath: objectPath,
+        proofFileName: file.originalname,
+        proofMimeType: file.mimetype,
+        proofFileSize: file.size,
+        proofSubmittedAt: new Date(),
+        proofSubmittedByUserId: userId,
+      };
+      if (req.body.content !== undefined) {
+        updatePayload.proofContent = req.body.content;
+      }
+      const updated = await storage.updateCompositeWorkflowSessionStep(sessionStepId, updatePayload);
+      if (!updated) {
+        return res.status(404).json({ error: "Session step not found" });
+      }
+      const withUrl = await attachProofUrl(updated);
+      broadcastSession(sessionId, { type: "session:proof_submitted", sessionId, sessionStepId });
+      res.status(201).json(withUrl);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to upload proof" });
+    }
+  });
+
+  app.delete("/api/composite-sessions/:id/steps/:sessionStepId/proof", async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const sessionId = parseInt(req.params.id);
+      const session = await storage.getCompositeWorkflowSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const member = await getSessionMember(sessionId, userId);
+      if (!ensureSessionPermission(member, session.ownerId || null, userId, "canEditProof")) {
+        return res.status(403).json({ error: "You don't have permission to edit proofs" });
+      }
+      const sessionStepId = parseInt(req.params.sessionStepId);
+      const sessionStep = session.sessionSteps.find((step: any) => step.id === sessionStepId);
+      if (!sessionStep) {
+        return res.status(404).json({ error: "Session step not found" });
+      }
+      if (sessionStep.proofFilePath) {
+        await supabase.storage.from("intel-docs").remove([sessionStep.proofFilePath]);
+      }
+      const updated = await storage.updateCompositeWorkflowSessionStep(sessionStepId, {
+        proofContent: null,
+        proofFilePath: null,
+        proofFileName: null,
+        proofMimeType: null,
+        proofFileSize: null,
+        proofSubmittedAt: null,
+        proofSubmittedByUserId: null,
+      });
+      broadcastSession(sessionId, { type: "session:proof_deleted", sessionId, sessionStepId });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete proof" });
     }
   });
 
@@ -1298,8 +1683,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: fromError(validation.error).toString() });
       }
       const message = await storage.addCompositeWorkflowSessionMessage(validation.data);
-      broadcastSession(sessionId, { type: "session:chat_message", sessionId, messageId: message.id });
-      res.status(201).json(message);
+      const memberUser = session.members?.find((member: any) => member.userId === userId)?.user || null;
+      const payload = {
+        ...message,
+        user: memberUser,
+        reads: [],
+      };
+      broadcastSession(sessionId, { type: "session:chat_message", sessionId, message: payload });
+      res.status(201).json(payload);
     } catch (error) {
       res.status(500).json({ error: "Failed to send chat message" });
     }
@@ -1334,7 +1725,7 @@ export async function registerRoutes(
         const read = await storage.addCompositeWorkflowSessionMessageRead({ messageId, userId });
         if (read) reads.push(read);
       }
-      broadcastSession(sessionId, { type: "session:chat_read", sessionId, userId });
+      broadcastSession(sessionId, { type: "session:chat_read", sessionId, userId, messageIds });
       res.json({ success: true, reads });
     } catch (error) {
       res.status(500).json({ error: "Failed to mark messages read" });

@@ -15,6 +15,10 @@ import {
   removeCompositeSessionAssignmentDelegate,
   addCompositeSessionLaneDelegate,
   removeCompositeSessionLaneDelegate,
+  createCompositeSession,
+  getComposites,
+  updateSessionProofConfig,
+  deleteSessionProof,
   searchUsers,
 } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
@@ -77,22 +81,34 @@ export default function CompositeSessionsPage() {
   const [laneDelegateQuery, setLaneDelegateQuery] = useState("");
   const [laneOwnerId, setLaneOwnerId] = useState<string | null>(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
+  const [proofStepId, setProofStepId] = useState<number | null>(null);
+  const [proofRequired, setProofRequired] = useState(false);
+  const [proofTitle, setProofTitle] = useState("");
+  const [proofDescription, setProofDescription] = useState("");
   const [permissions, setPermissions] = useState({
     canEditSteps: false,
     canManageAssignments: false,
     canManageSharing: false,
     canEditIntel: false,
+    canEditProof: false,
     canChat: false,
     allowLaneDelegation: false,
   });
   const [laneColor, setLaneColor] = useState("#38bdf8");
+  const [createCompositeId, setCreateCompositeId] = useState<number | null>(null);
+  const [newSessionName, setNewSessionName] = useState("");
 
   const sessionIdFromParams = params?.id ? parseInt(params.id, 10) : null;
   const isSingleSession = !!sessionIdFromParams;
+  const backSessionId = sessionIdFromParams ?? selectedSessionId;
 
   const { data: sessions, isLoading } = useQuery<CompositeSessionSummary[]>({
     queryKey: ["composite-sessions"],
     queryFn: getCompositeSessions,
+  });
+  const { data: workflows } = useQuery<CompositeWorkflowWithItems[]>({
+    queryKey: ["composites"],
+    queryFn: getComposites,
   });
 
   useEffect(() => {
@@ -130,11 +146,22 @@ export default function CompositeSessionsPage() {
     }
   }, [sessions, selectedSessionId, location, sessionIdFromParams, isSingleSession]);
 
+  useEffect(() => {
+    if (createCompositeId) return;
+    if (!workflows || workflows.length === 0) return;
+    setCreateCompositeId(workflows[0].id);
+  }, [workflows, createCompositeId]);
+
   const { data: session, isLoading: sessionLoading } = useQuery<CompositeSessionPayload>({
     queryKey: ["composite-session", selectedSessionId],
     queryFn: () => getCompositeSession(selectedSessionId!),
     enabled: !!selectedSessionId,
   });
+
+  const selectedWorkflowForSession = useMemo(
+    () => workflows?.find((workflow) => workflow.id === createCompositeId) || null,
+    [workflows, createCompositeId]
+  );
 
   const { data: searchResults } = useQuery<ShareUser[]>({
     queryKey: ["user-search", searchQuery],
@@ -171,6 +198,11 @@ export default function CompositeSessionsPage() {
     if (session.ownerId === user.id) return true;
     return !!currentMember?.canManageAssignments;
   }, [session, user, currentMember]);
+  const canManageProofs = useMemo(() => {
+    if (!session || !user) return false;
+    if (session.ownerId === user.id) return true;
+    return !!currentMember?.canEditProof;
+  }, [session, user, currentMember]);
 
   const assignmentsForSelectedStep = useMemo(
     () => session?.assignments.filter((assignment) => assignment.stepId === assignStepId) || [],
@@ -181,6 +213,11 @@ export default function CompositeSessionsPage() {
     if (!assignmentsForSelectedStep.length) return null;
     return assignmentsForSelectedStep.find((assignment) => assignment.id === selectedAssignmentId) || assignmentsForSelectedStep[0];
   }, [assignmentsForSelectedStep, selectedAssignmentId]);
+
+  const sessionStepForProof = useMemo(() => {
+    if (!proofStepId || !session) return null;
+    return session.sessionSteps.find((step) => step.stepId === proofStepId) || null;
+  }, [proofStepId, session]);
 
   const canManageAssignmentDelegates = useMemo(() => {
     if (!selectedAssignment || !user) return false;
@@ -212,6 +249,19 @@ export default function CompositeSessionsPage() {
     if (selectedAssignmentId) return;
     setSelectedAssignmentId(session.assignments[0].id);
   }, [session, selectedAssignmentId]);
+
+  useEffect(() => {
+    if (!session?.composite?.steps?.length) return;
+    if (proofStepId) return;
+    setProofStepId(session.composite.steps[0].id);
+  }, [session, proofStepId]);
+
+  useEffect(() => {
+    if (!sessionStepForProof) return;
+    setProofRequired(!!sessionStepForProof.proofRequired);
+    setProofTitle(sessionStepForProof.proofTitle || "");
+    setProofDescription(sessionStepForProof.proofDescription || "");
+  }, [sessionStepForProof]);
 
   const addMemberMutation = useMutation({
     mutationFn: (payload: { userId: string }) =>
@@ -290,6 +340,25 @@ export default function CompositeSessionsPage() {
     },
   });
 
+  const updateProofConfigMutation = useMutation({
+    mutationFn: () =>
+      updateSessionProofConfig(selectedSessionId!, sessionStepForProof!.id, {
+        proofRequired,
+        proofTitle,
+        proofDescription,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["composite-session", selectedSessionId] });
+    },
+  });
+
+  const deleteProofMutation = useMutation({
+    mutationFn: () => deleteSessionProof(selectedSessionId!, sessionStepForProof!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["composite-session", selectedSessionId] });
+    },
+  });
+
   const updateAssignmentCache = (assignmentId: number, patch: Record<string, any>) => {
     queryClient.setQueryData(["composite-session", selectedSessionId], (data: CompositeSessionPayload | undefined) => {
       if (!data) return data;
@@ -352,23 +421,38 @@ export default function CompositeSessionsPage() {
     },
   });
 
+  const createSessionMutation = useMutation({
+    mutationFn: () =>
+      createCompositeSession({
+        compositeId: createCompositeId!,
+        name: newSessionName || `${selectedWorkflowForSession?.name || "Workflow"} Session`,
+      }),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["composite-sessions"] });
+      setNewSessionName("");
+      navigate(`/sessions/${created.id}`);
+    },
+  });
+
   return (
-    <div className="min-h-screen bg-black text-foreground">
-      <header className="h-14 border-b border-white/5 bg-black/60 flex items-center justify-between px-4">
+    <div className="min-h-screen bg-black text-foreground relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(132,204,22,0.08),_transparent_55%)]" />
+      <div className="relative z-10">
+      <header className="h-16 border-b border-white/10 bg-black/70 backdrop-blur flex items-center justify-between px-4">
         <Button
           variant="ghost"
           size="sm"
           onClick={() =>
             navigate(
-              isSingleSession && selectedSessionId
-                ? `/composite-sessions/${selectedSessionId}`
-                : "/composites"
+              isSingleSession && backSessionId
+                ? `/sessions/${backSessionId}`
+                : "/workflows"
             )
           }
           className="text-white/60 hover:text-white"
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
-          {isSingleSession ? "Back to Session" : "Back to Protocols"}
+          {isSingleSession ? "Back to Session" : "Back to Workflows"}
         </Button>
         <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-white/50">
           <Users className="w-4 h-4" />
@@ -379,9 +463,9 @@ export default function CompositeSessionsPage() {
         </div>
       </header>
 
-      <div className={isSingleSession ? "min-h-[calc(100vh-56px)]" : "grid grid-cols-[280px_1fr] min-h-[calc(100vh-56px)]"}>
+      <div className={isSingleSession ? "min-h-[calc(100vh-64px)]" : "grid grid-cols-[280px_1fr] min-h-[calc(100vh-64px)]"}>
         {!isSingleSession && (
-          <aside className="border-r border-white/5 bg-black/60 p-4">
+          <aside className="border-r border-white/10 bg-black/70 backdrop-blur p-4 shadow-[inset_-1px_0_0_rgba(255,255,255,0.03)]">
             <h2 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-4">Live Sessions</h2>
             {isLoading ? (
               <div className="flex justify-center py-10">
@@ -411,6 +495,49 @@ export default function CompositeSessionsPage() {
         )}
 
         <main className={isSingleSession ? "p-8 flex justify-center" : "p-8"}>
+          {!isSingleSession && (
+            <div className="mb-8 border border-white/10 bg-gradient-to-br from-white/5 via-black/50 to-black/80 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xs font-mono text-white/60 uppercase tracking-widest">Start a Session</h2>
+                  <p className="text-sm text-white/40 mt-1">Launch a live workspace from a specific workflow.</p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => createSessionMutation.mutate()}
+                  disabled={!createCompositeId || createSessionMutation.isPending}
+                  className="bg-primary text-black font-mono uppercase tracking-widest"
+                >
+                  {createSessionMutation.isPending ? "Creating..." : "Create Session"}
+                </Button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-[1.2fr_1fr]">
+                <div>
+                  <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Workflow</label>
+                  <select
+                    value={createCompositeId ?? ""}
+                    onChange={(e) => setCreateCompositeId(parseInt(e.target.value, 10))}
+                    className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white focus:outline-none focus:border-primary"
+                  >
+                    {workflows?.map((workflow) => (
+                      <option key={workflow.id} value={workflow.id}>
+                        {workflow.name || `Workflow ${workflow.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Session Name</label>
+                  <input
+                    value={newSessionName}
+                    onChange={(e) => setNewSessionName(e.target.value)}
+                    placeholder={selectedWorkflowForSession ? `${selectedWorkflowForSession.name} Session` : "Session name"}
+                    className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
           {sessionLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -419,7 +546,7 @@ export default function CompositeSessionsPage() {
             <div className="text-center text-white/40">Select a session to manage.</div>
           ) : (
             <div className={isSingleSession ? "w-full max-w-4xl space-y-8" : "max-w-4xl space-y-8"}>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between border border-white/10 bg-white/5 p-4 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
                 <div>
                   <h1 className="text-2xl font-display text-white">{session.name || session.composite?.name}</h1>
                   <p className="text-xs text-white/40 mt-1">{session.composite?.name}</p>
@@ -437,7 +564,7 @@ export default function CompositeSessionsPage() {
                   )}
                   {!isSingleSession && (
                     <Button
-                      onClick={() => navigate(`/composite-sessions/${session.id}`)}
+                      onClick={() => navigate(`/sessions/${session.id}`)}
                       className="bg-primary text-black font-mono uppercase tracking-widest"
                     >
                       Open Session
@@ -446,7 +573,7 @@ export default function CompositeSessionsPage() {
                 </div>
               </div>
 
-              <div className="border border-white/10 bg-black/40 p-6">
+              <div className="border border-white/10 bg-gradient-to-br from-white/5 via-black/40 to-black/80 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xs font-mono text-white/60 uppercase tracking-widest">Members</h2>
                   {!canManageSharing && (
@@ -525,6 +652,17 @@ export default function CompositeSessionsPage() {
                           <label className="flex items-center gap-2">
                             <input
                               type="checkbox"
+                              checked={member.canEditProof}
+                              disabled={!canManageSharing || isOwner}
+                              onChange={(e) =>
+                                updateMemberMutation.mutate({ memberId: member.id, data: { canEditProof: e.target.checked } })
+                              }
+                            />
+                            Proof
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
                               checked={member.canChat}
                               disabled={!canManageSharing || isOwner}
                               onChange={(e) =>
@@ -567,7 +705,7 @@ export default function CompositeSessionsPage() {
               </div>
 
               {canManageSharing && (
-                <div className="border border-white/10 bg-black/40 p-6">
+                <div className="border border-white/10 bg-gradient-to-br from-white/5 via-black/40 to-black/80 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
                   <h2 className="text-xs font-mono text-white/60 uppercase tracking-widest mb-4">Add Member</h2>
                   <input
                     value={searchQuery}
@@ -625,6 +763,14 @@ export default function CompositeSessionsPage() {
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
+                        checked={permissions.canEditProof}
+                        onChange={(e) => setPermissions((prev) => ({ ...prev, canEditProof: e.target.checked }))}
+                      />
+                      Proof
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
                         checked={permissions.canChat}
                         onChange={(e) => setPermissions((prev) => ({ ...prev, canChat: e.target.checked }))}
                       />
@@ -651,7 +797,7 @@ export default function CompositeSessionsPage() {
                 </div>
               )}
 
-              <div className="border border-white/10 bg-black/40 p-6">
+              <div className="border border-white/10 bg-gradient-to-br from-white/5 via-black/40 to-black/80 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xs font-mono text-white/60 uppercase tracking-widest">Assignments</h2>
                   {!canManageAssignments && !canManageAssignmentDelegates && (
@@ -668,7 +814,7 @@ export default function CompositeSessionsPage() {
                     >
                       {session.composite?.steps?.map((step, index) => (
                         <option key={step.id} value={step.id}>
-                          Phase {index + 1} ? {step.name}
+                          Phase {index + 1} - {step.name}
                         </option>
                       ))}
                     </select>
@@ -848,7 +994,87 @@ export default function CompositeSessionsPage() {
                 </div>
               </div>
 
-              <div className="border border-white/10 bg-black/40 p-6">
+              <div className="border border-white/10 bg-gradient-to-br from-white/5 via-black/40 to-black/80 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xs font-mono text-white/60 uppercase tracking-widest">Proof Requirements</h2>
+                  {!canManageProofs && (
+                    <span className="text-[10px] text-white/40">View only</span>
+                  )}
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Select Phase</label>
+                    <select
+                      value={proofStepId ?? ""}
+                      onChange={(e) => setProofStepId(parseInt(e.target.value, 10))}
+                      className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white focus:outline-none focus:border-primary"
+                    >
+                      {session?.composite?.steps?.map((step, index) => (
+                        <option key={step.id} value={step.id}>
+                          Phase {index + 1} - {step.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {sessionStepForProof ? (
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-2 text-[11px] text-white/50 font-mono">
+                        <input
+                          type="checkbox"
+                          checked={proofRequired}
+                          disabled={!canManageProofs}
+                          onChange={(e) => setProofRequired(e.target.checked)}
+                        />
+                        Require proof for this phase
+                      </label>
+                      <input
+                        value={proofTitle}
+                        onChange={(e) => setProofTitle(e.target.value)}
+                        placeholder="Proof title"
+                        disabled={!canManageProofs || !proofRequired}
+                        className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary disabled:opacity-40"
+                      />
+                      <textarea
+                        value={proofDescription}
+                        onChange={(e) => setProofDescription(e.target.value)}
+                        placeholder="Proof description"
+                        disabled={!canManageProofs || !proofRequired}
+                        className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[90px] resize-none disabled:opacity-40"
+                      />
+                      {sessionStepForProof.proofSubmittedAt && (
+                        <div className="text-[10px] text-emerald-300 font-mono uppercase tracking-widest">
+                          Proof submitted
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => updateProofConfigMutation.mutate()}
+                          disabled={!canManageProofs || updateProofConfigMutation.isPending}
+                          className="bg-primary text-black font-mono uppercase tracking-widest"
+                        >
+                          Save Proof Settings
+                        </Button>
+                        {sessionStepForProof.proofSubmittedAt && canManageProofs && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => deleteProofMutation.mutate()}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            Delete Proof
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-white/40">Select a phase to edit proofs.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="border border-white/10 bg-gradient-to-br from-white/5 via-black/40 to-black/80 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xs font-mono text-white/60 uppercase tracking-widest">Lane Delegates</h2>
                   {!canManageLaneDelegates && (
@@ -941,7 +1167,7 @@ export default function CompositeSessionsPage() {
           >
             <h3 className="text-lg text-white font-display">Delete Session</h3>
             <p className="text-sm text-white/50 mt-2">
-              This will remove the session for everyone. This can’t be undone.
+              This will remove the session for everyone. This can't be undone.
             </p>
             <div className="mt-6 flex items-center gap-2 justify-end">
               <Button variant="ghost" onClick={() => setPendingDeleteSession(null)}>
@@ -960,6 +1186,7 @@ export default function CompositeSessionsPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

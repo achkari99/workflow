@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -34,49 +35,94 @@ export default function AuthPage() {
     };
 
     return (
-        <div className="min-h-screen bg-black flex items-center justify-center p-4 overflow-hidden relative">
-            {/* Background decoration */}
-            <div className="absolute top-0 left-0 w-full h-full opacity-20">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-lime-500/20 blur-[120px] rounded-full" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/20 blur-[120px] rounded-full" />
-            </div>
+        <div
+            className="min-h-screen flex items-center justify-center p-4 overflow-hidden relative bg-[#070909] text-white"
+            style={{
+                "--auth-accent": "#8ef5d1",
+                "--auth-accent-2": "#7cb5ff",
+                "--auth-ink": "#0b0f0e",
+            } as CSSProperties}
+        >
+            <div className="absolute inset-0 opacity-60 bg-[radial-gradient(circle_at_top,_rgba(126,244,202,0.12),_transparent_55%)]" />
+            <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_bottom,_rgba(124,181,255,0.16),_transparent_55%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(120deg,_rgba(255,255,255,0.04)_0%,_transparent_45%,_rgba(255,255,255,0.03)_100%)]" />
+            <div className="absolute inset-0 opacity-[0.08] bg-[radial-gradient(circle,_rgba(255,255,255,0.4)_1px,_transparent_1px)] bg-[length:18px_18px]" />
 
             <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5 }}
-                className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative z-10"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+                className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-[1.1fr_1fr] rounded-[32px] overflow-hidden border border-white/10 bg-[#0b0f10]/80 backdrop-blur-xl shadow-[0_30px_120px_rgba(0,0,0,0.65)] relative z-10"
             >
-                <div className="p-8 md:p-12 flex flex-col justify-center border-b md:border-b-0 md:border-r border-white/10">
-                    <div className="flex items-center gap-3 mb-8">
-                        <div className="w-10 h-10 bg-lime-500 rounded-lg flex items-center justify-center shadow-[0_0_20px_rgba(132,204,22,0.4)]">
-                            <Zap className="text-black w-6 h-6 fill-current" />
+                <div className="p-8 md:p-12 flex flex-col justify-between gap-10 bg-[linear-gradient(160deg,_rgba(12,20,22,0.96)_10%,_rgba(8,8,10,0.92)_100%)]">
+                    <div>
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-[color:var(--auth-accent)] text-[color:var(--auth-ink)] shadow-[0_0_30px_rgba(126,244,202,0.45)]">
+                                <Zap className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <p className="text-[11px] uppercase tracking-[0.35em] text-white/50 font-mono">System Gate</p>
+                                <h1 className="text-2xl font-oxanium tracking-tight">Living Workflow</h1>
+                            </div>
                         </div>
-                        <span className="text-xl font-bold tracking-tight text-white font-oxanium uppercase">Living Workflow</span>
+
+                        <h2 className="text-3xl font-oxanium leading-tight text-white mb-4">
+                            Command your missions with clarity and momentum.
+                        </h2>
+                        <p className="text-white/50 text-sm max-w-md">
+                            A focused workspace for teams that need precision, velocity, and visibility across every phase.
+                        </p>
+                    </div>
+
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-3 text-xs font-mono uppercase tracking-widest text-white/50">
+                            <span className="h-2 w-2 rounded-full bg-[color:var(--auth-accent)] shadow-[0_0_12px_rgba(126,244,202,0.7)]" />
+                            Core systems online
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-xs text-white/50">
+                            <div className="border border-white/10 bg-white/5 p-4">
+                                <p className="text-[10px] uppercase tracking-widest text-white/40 font-mono">Active Missions</p>
+                                <p className="text-xl font-oxanium text-white mt-2">Realtime</p>
+                            </div>
+                            <div className="border border-white/10 bg-white/5 p-4">
+                                <p className="text-[10px] uppercase tracking-widest text-white/40 font-mono">Live Sessions</p>
+                                <p className="text-xl font-oxanium text-white mt-2">Synchronized</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-8 md:p-12 bg-black/50">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-[0.35em] text-white/40 font-mono">Access Node</p>
+                            <h3 className="text-2xl font-oxanium">Authenticate</h3>
+                        </div>
+                        <ShieldCheck className="w-7 h-7 text-[color:var(--auth-accent-2)]" />
                     </div>
 
                     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 bg-black/50 p-1 rounded-xl mb-8">
-                            <TabsTrigger value="login" className="rounded-lg data-[state=active]:bg-zinc-800">Login</TabsTrigger>
-                            <TabsTrigger value="register" className="rounded-lg data-[state=active]:bg-zinc-800">Explore</TabsTrigger>
+                        <TabsList className="grid w-full grid-cols-2 bg-white/5 p-1 rounded-full mb-8">
+                            <TabsTrigger value="login" className="rounded-full data-[state=active]:bg-white/10">Login</TabsTrigger>
+                            <TabsTrigger value="register" className="rounded-full data-[state=active]:bg-white/10">Register</TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="login">
                             <form onSubmit={handleLogin} className="space-y-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="username">Username</Label>
-                                    <Input id="username" name="username" placeholder="quantum_explorer" className="bg-black/50 border-white/10" required />
+                                    <Label htmlFor="username" className="text-white/60">Username</Label>
+                                    <Input id="username" name="username" placeholder="core_operator" className="bg-black/40 border-white/10 focus:border-[color:var(--auth-accent)]" required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="password">Security Protocol (Password)</Label>
-                                    <Input id="password" name="password" type="password" placeholder="••••••••" className="bg-black/50 border-white/10" required />
+                                    <Label htmlFor="password" className="text-white/60">Password</Label>
+                                    <Input id="password" name="password" type="password" placeholder="********" className="bg-black/40 border-white/10 focus:border-[color:var(--auth-accent)]" required />
                                 </div>
                                 <Button
                                     type="submit"
-                                    className="w-full mt-6 bg-lime-500 hover:bg-lime-400 text-black font-bold h-12"
+                                    className="w-full mt-6 bg-[color:var(--auth-accent)] hover:bg-[#9ff8dc] text-black font-bold h-12 tracking-widest uppercase text-xs"
                                     disabled={loginMutation.isPending}
                                 >
-                                    {loginMutation.isPending ? <Loader2 className="animate-spin" /> : "Initiate Connection"}
+                                    {loginMutation.isPending ? <Loader2 className="animate-spin" /> : "Enter Command"}
                                 </Button>
                             </form>
                         </TabsContent>
@@ -85,71 +131,36 @@ export default function AuthPage() {
                             <form onSubmit={handleRegister} className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="firstName">First Name</Label>
-                                        <Input id="firstName" name="firstName" placeholder="Alex" className="bg-black/50 border-white/10" />
+                                        <Label htmlFor="firstName" className="text-white/60">First Name</Label>
+                                        <Input id="firstName" name="firstName" placeholder="Alex" className="bg-black/40 border-white/10 focus:border-[color:var(--auth-accent-2)]" />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="lastName">Last Name</Label>
-                                        <Input id="lastName" name="lastName" placeholder="Smith" className="bg-black/50 border-white/10" />
+                                        <Label htmlFor="lastName" className="text-white/60">Last Name</Label>
+                                        <Input id="lastName" name="lastName" placeholder="Smith" className="bg-black/40 border-white/10 focus:border-[color:var(--auth-accent-2)]" />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="reg-username">Username</Label>
-                                    <Input id="reg-username" name="username" placeholder="quantum_explorer" className="bg-black/50 border-white/10" required />
+                                    <Label htmlFor="reg-username" className="text-white/60">Username</Label>
+                                    <Input id="reg-username" name="username" placeholder="core_operator" className="bg-black/40 border-white/10 focus:border-[color:var(--auth-accent-2)]" required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="email">Email</Label>
-                                    <Input id="email" name="email" type="email" placeholder="alex@quantum.xyz" className="bg-black/50 border-white/10" required />
+                                    <Label htmlFor="email" className="text-white/60">Email</Label>
+                                    <Input id="email" name="email" type="email" placeholder="alex@command.io" className="bg-black/40 border-white/10 focus:border-[color:var(--auth-accent-2)]" required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="reg-password">Security Protocol (Password)</Label>
-                                    <Input id="reg-password" name="password" type="password" placeholder="••••••••" className="bg-black/50 border-white/10" required />
+                                    <Label htmlFor="reg-password" className="text-white/60">Password</Label>
+                                    <Input id="reg-password" name="password" type="password" placeholder="********" className="bg-black/40 border-white/10 focus:border-[color:var(--auth-accent-2)]" required />
                                 </div>
                                 <Button
                                     type="submit"
-                                    className="w-full mt-6 bg-blue-500 hover:bg-blue-400 text-white font-bold h-12"
+                                    className="w-full mt-6 bg-[color:var(--auth-accent-2)] hover:bg-[#93c5ff] text-[#0b0f10] font-bold h-12 tracking-widest uppercase text-xs"
                                     disabled={registerMutation.isPending}
                                 >
-                                    {registerMutation.isPending ? <Loader2 className="animate-spin" /> : "Deploy Agent"}
+                                    {registerMutation.isPending ? <Loader2 className="animate-spin" /> : "Create Profile"}
                                 </Button>
                             </form>
                         </TabsContent>
                     </Tabs>
-                </div>
-
-                <div className="hidden md:flex p-12 bg-white/5 flex-col justify-between relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-8 opacity-20">
-                        <ShieldCheck className="w-64 h-64 text-lime-500" />
-                    </div>
-
-                    <div className="relative z-10">
-                        <h2 className="text-3xl font-bold text-white mb-6 font-oxanium leading-tight">
-                            WELCOME TO YOUR <br />
-                            <span className="text-lime-500 uppercase tracking-widest">Mission Control</span>
-                        </h2>
-                        <div className="space-y-6 text-zinc-400">
-                            <p className="flex items-start gap-3">
-                                <span className="w-6 h-6 rounded-full bg-lime-500/10 flex items-center justify-center shrink-0 text-lime-500 mt-1">1</span>
-                                <span>Track complex workflows with real-time status updates and priority markers.</span>
-                            </p>
-                            <p className="flex items-start gap-3">
-                                <span className="w-6 h-6 rounded-full bg-lime-500/10 flex items-center justify-center shrink-0 text-lime-500 mt-1">2</span>
-                                <span>Manage intel documents and stakeholder approvals in a sleek, gamified interface.</span>
-                            </p>
-                            <p className="flex items-start gap-3">
-                                <span className="w-6 h-6 rounded-full bg-lime-500/10 flex items-center justify-center shrink-0 text-lime-500 mt-1">3</span>
-                                <span>Experience work like a mission—bold, interactive, and high-momentum.</span>
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="pt-12 border-t border-white/10 mt-auto relative z-10">
-                        <p className="text-sm text-zinc-500 uppercase tracking-widest font-oxanium mb-2">System Status</p>
-                        <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-lime-500 animate-pulse" />
-                            <span className="text-xs font-mono text-zinc-400 italic">Core operational. Awaiting authentication...</span>
-                        </div>
-                    </div>
                 </div>
             </motion.div>
         </div>

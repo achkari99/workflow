@@ -13,7 +13,11 @@ import CompositesPage from "@/pages/composites";
 import CompositeWorkspace from "@/pages/composite-workspace";
 import CompositeSession from "@/pages/composite-session";
 import CompositeSessions from "@/pages/composite-sessions";
+import SessionsHub from "@/pages/sessions-hub";
+import WorkflowControl from "@/pages/workflow-control";
+import CompositeControl from "@/pages/composite-control";
 import AuthPage from "@/pages/auth-page";
+import ProfilePage from "@/pages/profile";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -39,23 +43,56 @@ function Router() {
   return (
     <Switch>
       <Route path="/auth" component={AuthPage} />
+      <Route path="/profile">
+        {(params) => <ProtectedRoute component={ProfilePage} path="/profile" {...params} />}
+      </Route>
+      <Route path="/profile/:id">
+        {(params) => <ProtectedRoute component={ProfilePage} path="/profile/:id" {...params} />}
+      </Route>
       <Route path="/">
         {(params) => <ProtectedRoute component={MissionControl} path="/" {...params} />}
       </Route>
       <Route path="/workflow/:id">
         {(params) => <ProtectedRoute component={WorkflowWorkspace} path="/workflow/:id" {...params} />}
       </Route>
-      <Route path="/workflows">
-        {(params) => <ProtectedRoute component={WorkflowList} path="/workflows" {...params} />}
+      <Route path="/missions/:id/manage">
+        {(params) => <ProtectedRoute component={WorkflowControl} path="/missions/:id/manage" {...params} />}
       </Route>
-      <Route path="/workflows/new">
-        {(params) => <ProtectedRoute component={WorkflowCreate} path="/workflows/new" {...params} />}
+      <Route path="/missions">
+        {(params) => <ProtectedRoute component={WorkflowList} path="/missions" {...params} />}
+      </Route>
+      <Route path="/missions/new">
+        {(params) => <ProtectedRoute component={WorkflowCreate} path="/missions/new" {...params} />}
       </Route>
       <Route path="/intel/:workflowId/:stepId?">
         {(params) => <ProtectedRoute component={IntelPage} path="/intel/:workflowId/:stepId?" {...params} />}
       </Route>
+      <Route path="/workflows">
+        {(params) => <ProtectedRoute component={CompositesPage} path="/workflows" {...params} />}
+      </Route>
+      <Route path="/workflows/:id/manage">
+        {(params) => <ProtectedRoute component={CompositeControl} path="/workflows/:id/manage" {...params} />}
+      </Route>
+      <Route path="/workflows/:id">
+        {(params) => <ProtectedRoute component={CompositeWorkspace} path="/workflows/:id" {...params} />}
+      </Route>
+      <Route path="/sessions">
+        {(params) => <ProtectedRoute component={SessionsHub} path="/sessions" {...params} />}
+      </Route>
+      <Route path="/sessions/new">
+        {(params) => <ProtectedRoute component={CompositeSessions} path="/sessions/new" {...params} />}
+      </Route>
+      <Route path="/sessions/:id/manage">
+        {(params) => <ProtectedRoute component={CompositeSessions} path="/sessions/:id/manage" {...params} />}
+      </Route>
+      <Route path="/sessions/:id">
+        {(params) => <ProtectedRoute component={CompositeSession} path="/sessions/:id" {...params} />}
+      </Route>
       <Route path="/composites">
         {(params) => <ProtectedRoute component={CompositesPage} path="/composites" {...params} />}
+      </Route>
+      <Route path="/composites/:id/manage">
+        {(params) => <ProtectedRoute component={CompositeControl} path="/composites/:id/manage" {...params} />}
       </Route>
       <Route path="/composite-sessions">
         {(params) => <ProtectedRoute component={CompositeSessions} path="/composite-sessions" {...params} />}

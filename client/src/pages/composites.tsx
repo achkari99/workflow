@@ -10,7 +10,6 @@ import {
   createCompositeSession,
   addCompositeSessionMember,
   searchUsers,
-  getCompositeSessions,
 } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -30,15 +29,6 @@ import { toast } from "sonner";
 import type { Workflow, CompositeWorkflowWithItems, Step } from "@shared/schema";
 
 type ShareUser = { id: string; email: string | null; firstName: string | null; lastName: string | null };
-type CompositeSessionSummary = {
-  id: number;
-  name: string | null;
-  compositeId: number;
-  ownerId: string | null;
-  createdAt: string;
-  composite?: { id: number; name: string | null } | null;
-};
-
 function ShareCompositeModal({
   composite,
   onClose,
@@ -150,7 +140,7 @@ function ShareCompositeModal({
       >
         <div className="p-6 border-b border-white/5 flex items-center justify-between">
           <div>
-            <h2 className="font-display text-2xl text-white tracking-widest uppercase">Share Protocol</h2>
+              <h2 className="font-display text-2xl text-white tracking-widest uppercase">Share Workflow</h2>
             <p className="text-white/40 text-xs font-mono mt-1 uppercase tracking-widest">{composite.name}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} className="text-white/20 hover:text-white">
@@ -348,16 +338,16 @@ function CreateCompositeModal({
 
   const createMutation = useMutation({
     mutationFn: () => {
-      console.log("Initiating Master Protocol with steps:", selectedSteps.map(s => s.id));
+      console.log("Initiating Master Workflow with steps:", selectedSteps.map(s => s.id));
       return createComposite(name, description, selectedSteps.map(s => s.id));
     },
     onSuccess: () => {
-      toast.success(`Protocol ${name} established successfully.`);
+      toast.success(`Workflow ${name} established successfully.`);
       onSuccess();
       onClose();
     },
     onError: (err) => {
-      console.error("Master Protocol failure:", err);
+      console.error("Master Workflow failure:", err);
       toast.error("Failed to establish protocol. Check console for details.");
     }
   });
@@ -392,7 +382,7 @@ function CreateCompositeModal({
         {/* Modal Header */}
         <div className="relative z-10 px-8 py-6 border-b border-white/5 flex items-center justify-between bg-black/40">
           <div>
-            <h2 className="font-display text-2xl text-white tracking-widest uppercase">Master Mission Remixer</h2>
+            <h2 className="font-display text-2xl text-white tracking-widest uppercase">Workflow Composer</h2>
             <p className="text-white/30 text-xs font-mono mt-1 uppercase tracking-widest italic">Modular Strategy Architecture Engaged</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} className="text-white/20 hover:text-white">
@@ -545,7 +535,7 @@ function CreateCompositeModal({
                   ) : (
                     <div className="flex items-center gap-3">
                       <Zap className="w-5 h-5" />
-                      Establish Master Protocol
+                        Establish Master Workflow
                     </div>
                   )}
                 </Button>
@@ -567,11 +557,6 @@ export default function CompositesPage() {
   const { data: composites, isLoading: compositesLoading } = useQuery<CompositeWorkflowWithItems[]>({
     queryKey: ["composites"],
     queryFn: getComposites,
-  });
-
-  const { data: sessions } = useQuery<CompositeSessionSummary[]>({
-    queryKey: ["composite-sessions"],
-    queryFn: getCompositeSessions,
   });
 
   const { data: workflows } = useQuery({
@@ -597,28 +582,19 @@ export default function CompositesPage() {
           data-testid="button-back"
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
-          Mission Control
+          Home
         </Button>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/composite-sessions")}
-            className="text-white/60 hover:text-white border border-white/10"
-          >
-            <Users className="w-4 h-4 mr-2" />
-            Sessions
-          </Button>
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider text-xs"
-            data-testid="button-create-composite"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Combine Workflows
-          </Button>
-        </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider text-xs"
+              data-testid="button-create-composite"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Combine Workflows
+            </Button>
+          </div>
       </header>
 
       <div className="container mx-auto max-w-4xl py-12 px-4">
@@ -632,44 +608,12 @@ export default function CompositesPage() {
               <Layers className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h1 className="font-display text-4xl text-white tracking-tight">Composite Workflows</h1>
+              <h1 className="font-display text-4xl text-white tracking-tight">Workflows</h1>
               <p className="text-white/40 mt-1 text-lg">Unified oversight for multiple mission threads</p>
             </div>
           </div>
         </motion.div>
 
-        {sessions && sessions.length > 0 && (
-          <div className="mb-12">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-mono uppercase tracking-widest text-white/60">Live Sessions</h2>
-                <p className="text-white/30 text-xs">Active collaborations across composite protocols</p>
-              </div>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              {sessions.map((session) => (
-                <button
-                  key={session.id}
-                  onClick={() => navigate(`/composite-sessions/${session.id}`)}
-                  className="border border-white/10 bg-black/40 p-4 text-left hover:border-primary/40 transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-mono text-white/40 uppercase tracking-widest">Session</span>
-                    <span className="text-[10px] text-white/30">
-                      {new Date(session.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <h3 className="text-white text-lg font-display">
-                    {session.name || session.composite?.name || "Untitled Session"}
-                  </h3>
-                  <p className="text-xs text-white/40 mt-1">
-                    {session.composite?.name || "Composite Protocol"}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {compositesLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -682,13 +626,13 @@ export default function CompositesPage() {
             className="text-center py-20 border border-dashed border-white/10"
           >
             <Layers className="w-16 h-16 text-white/5 mx-auto mb-4" />
-            <p className="text-white/40 mb-4">No composite workflows established</p>
+            <p className="text-white/40 mb-4">No workflows established</p>
             <Button
               onClick={() => setShowCreateModal(true)}
               className="bg-primary hover:bg-primary/90 text-black px-8 py-6 h-auto font-mono text-sm tracking-widest uppercase"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Establish First Master Mission
+              Establish First Workflow
             </Button>
           </motion.div>
         ) : (
@@ -707,7 +651,7 @@ export default function CompositesPage() {
                   animate={{ opacity: 1, scale: 1 }}
                   whileHover={{ y: -4 }}
                   onClick={() => {
-                    navigate(`/composites/${composite.id}`);
+                    navigate(`/workflows/${composite.id}`);
                   }}
                   className="bg-black/40 border border-white/5 p-6 group transition-all relative overflow-hidden cursor-pointer hover:border-primary/20"
                   data-testid={`composite-card-${composite.id}`}
@@ -823,7 +767,7 @@ export default function CompositesPage() {
             onClose={() => setShareComposite(null)}
             onSessionCreated={(sessionId) => {
               setShareComposite(null);
-              navigate(`/composite-sessions/${sessionId}`);
+              navigate(`/sessions/${sessionId}`);
             }}
           />
         )}

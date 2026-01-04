@@ -1,7 +1,8 @@
 import { useParams, useLocation } from "wouter";
 import { useEffect, useState, useId } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getWorkflow, getStep, startStep, completeStep, advanceWorkflow, requestApproval, addIntelDoc, uploadIntelDoc } from "@/lib/api";
+import { getWorkflow, getStep, startStep, completeStep, advanceWorkflow, requestApproval, addIntelDoc, uploadIntelDoc, submitStepProof, uploadStepProof } from "@/lib/api";
+import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
@@ -15,7 +16,6 @@ import {
   Plus,
   Send,
   Target,
-  ListChecks,
   ArrowRight,
   Loader2,
   Shield,
@@ -107,22 +107,52 @@ function JourneyPath({
 
 function ExecutionCenter({
   step,
-  workflowId,
   isLoading,
+  proofTitle,
+  proofDescription,
+  proofContent,
+  onProofContentChange,
+  proofFile,
+  proofFileUrl,
+  onSelectProofFile,
+  isProofRequired,
+  isProofSubmitted,
+  isEditingProof,
+  onToggleEditProof,
+  onSubmitProof,
+  canEditProof,
+  isSubmittingProof,
+  proofFileInputId,
   onStartStep,
   onCompleteStep,
   onRequestApproval,
   onNextStep,
-  isActionPending
+  isActionPending,
+  isProofSatisfied,
 }: {
   step: StepWithDetails | null;
-  workflowId: number;
   isLoading: boolean;
+  proofTitle: string;
+  proofDescription: string;
+  proofContent: string;
+  onProofContentChange: (value: string) => void;
+  proofFile: File | null;
+  proofFileUrl?: string | null;
+  onSelectProofFile: (file: File | null) => void;
+  isProofRequired: boolean;
+  isProofSubmitted: boolean;
+  isEditingProof: boolean;
+  onToggleEditProof: () => void;
+  onSubmitProof: () => void;
+  canEditProof: boolean;
+  isSubmittingProof: boolean;
+  proofFileInputId: string;
   onStartStep: () => void;
   onCompleteStep: () => void;
   onRequestApproval: () => void;
   onNextStep?: () => void;
   isActionPending: boolean;
+  isProofSatisfied: boolean;
 }) {
   if (isLoading) {
     return (
@@ -167,77 +197,92 @@ function ExecutionCenter({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        {step.description && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
-          >
-            <h3 className="text-xs font-mono text-white/40 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <FileText className="w-3 h-3" /> Description
-            </h3>
-            <p className="text-white/70 leading-relaxed">{step.description}</p>
-          </motion.div>
-        )}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="border border-white/10 bg-white/5 p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Proof Brief</p>
+            <span className={`text-[10px] font-mono uppercase tracking-widest ${isProofRequired ? "text-primary" : "text-white/30"}`}>
+              {isProofRequired ? "Required" : "Optional"}
+            </span>
+          </div>
+          <h3 className="text-lg text-white mt-3">{proofTitle}</h3>
+          <p className="text-sm text-white/50 mt-2">{proofDescription}</p>
+          {!isProofRequired && (
+            <p className="text-[10px] text-white/30 mt-3 font-mono uppercase tracking-widest">
+              Proof not required for this phase.
+            </p>
+          )}
+        </div>
 
-        {step.objective && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="mb-8"
-          >
-            <h3 className="text-xs font-mono text-white/40 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <Target className="w-3 h-3" /> Objective
-            </h3>
-            <div className="bg-primary/5 border border-primary/20 p-4">
-              <p className="text-primary">{step.objective}</p>
+        <div className="border border-white/10 bg-white/5 p-5 space-y-3">
+          <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Submission</p>
+          <textarea
+            value={proofContent}
+            onChange={(e) => onProofContentChange(e.target.value)}
+            placeholder={isProofRequired ? "Write your proof..." : "No proof needed"}
+            disabled={!canEditProof || !isProofRequired || (!isEditingProof && isProofSubmitted)}
+            className="w-full bg-black/30 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[180px] resize-none disabled:opacity-40"
+          />
+          {(proofFile || proofFileUrl) && (
+            <div className="text-xs text-white/50">
+              {proofFileUrl ? (
+                <a href={proofFileUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                  View current attachment
+                </a>
+              ) : (
+                <span>Selected file: {proofFile?.name}</span>
+              )}
             </div>
-          </motion.div>
-        )}
+          )}
+        </div>
 
-        {step.instructions && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mb-8"
+        <div className="border border-white/10 bg-white/5 p-5 flex items-center gap-3">
+          <Button
+            onClick={() => {
+              if (!isProofRequired) return;
+              if (isProofSubmitted && !isEditingProof) {
+                onToggleEditProof();
+                return;
+              }
+              onSubmitProof();
+            }}
+            disabled={
+              !isProofRequired ||
+              !canEditProof ||
+              isSubmittingProof ||
+              (!(isProofSubmitted && !isEditingProof) && !proofContent.trim() && !proofFile)
+            }
+            className="flex-1 h-12 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
           >
-            <h3 className="text-xs font-mono text-white/40 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <ListChecks className="w-3 h-3" /> Instructions
-            </h3>
-            <div className="bg-white/5 p-4 font-mono text-sm text-white/60 whitespace-pre-wrap">
-              {step.instructions}
-            </div>
-          </motion.div>
-        )}
-
-        {step.requiresApproval && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mb-8"
+            {isSubmittingProof ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : null}
+            {isProofSubmitted && !isEditingProof ? "Edit Proofs" : "Submit Proofs"}
+          </Button>
+          <label
+            htmlFor={proofFileInputId}
+            className={`h-12 px-4 border border-white/10 text-xs font-mono uppercase tracking-widest flex items-center justify-center cursor-pointer ${!isProofRequired || !canEditProof || (isProofSubmitted && !isEditingProof) ? "opacity-40 cursor-not-allowed" : "hover:border-primary/50"
+              }`}
           >
-            <div className="bg-purple-500/10 border border-purple-500/20 p-4 flex items-start gap-3">
-              <Shield className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-purple-300 font-medium">Approval Required</p>
-                <p className="text-purple-300/60 text-sm mt-1">This step requires client approval before it can be marked complete.</p>
-              </div>
-            </div>
-          </motion.div>
-        )}
+            Upload
+          </label>
+          <input
+            id={proofFileInputId}
+            type="file"
+            accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/json,text/*,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            onChange={(e) => onSelectProofFile(e.target.files?.[0] || null)}
+            disabled={!isProofRequired || !canEditProof || (isProofSubmitted && !isEditingProof)}
+            className="hidden"
+          />
+        </div>
       </div>
-
-      <div className="p-6 border-t border-white/5 bg-black/20">
-        <div className="flex gap-3">
+      <div className="border-t border-white/5 p-4 bg-black/30">
+        <div className="space-y-3">
           {step.status === "active" && (
             <Button
               onClick={onStartStep}
               disabled={isActionPending}
-              className="flex-1 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider"
+              className="w-full h-11 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
               data-testid="button-start-step"
             >
               {isActionPending ? (
@@ -252,8 +297,8 @@ function ExecutionCenter({
           {step.status === "in_progress" && !step.requiresApproval && (
             <Button
               onClick={onCompleteStep}
-              disabled={isActionPending}
-              className="flex-1 bg-green-500 hover:bg-green-500/90 text-black font-mono uppercase tracking-wider"
+              disabled={isActionPending || !isProofSatisfied}
+              className="w-full h-11 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
               data-testid="button-complete-step"
             >
               {isActionPending ? (
@@ -261,7 +306,7 @@ function ExecutionCenter({
               ) : (
                 <CheckCircle2 className="w-4 h-4 mr-2" />
               )}
-              Mark Complete
+              Complete Phase
             </Button>
           )}
 
@@ -269,7 +314,7 @@ function ExecutionCenter({
             <Button
               onClick={onRequestApproval}
               disabled={isActionPending}
-              className="flex-1 bg-purple-500 hover:bg-purple-500/90 text-white font-mono uppercase tracking-wider"
+              className="w-full h-11 bg-purple-500 hover:bg-purple-500/90 text-white font-mono uppercase tracking-widest"
               data-testid="button-request-approval"
             >
               {isActionPending ? (
@@ -282,21 +327,20 @@ function ExecutionCenter({
           )}
 
           {step.status === "pending_approval" && (
-            <div className="flex-1 bg-purple-500/10 border border-purple-500/30 p-4 text-center">
+            <div className="w-full bg-purple-500/10 border border-purple-500/30 p-3 text-center">
               <p className="text-purple-300 font-mono text-sm">Awaiting client approval...</p>
             </div>
           )}
 
           {step.status === "completed" && (
-            <div className="flex-1 space-y-3">
-              <div className="bg-green-500/10 border border-green-500/30 p-4 text-center flex items-center justify-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-400" />
-                <p className="text-green-300 font-mono text-sm">Step Completed</p>
+            <div className="space-y-3">
+              <div className="h-11 flex items-center justify-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono text-xs uppercase tracking-widest">
+                <CheckCircle2 className="w-4 h-4" /> Phase Completed
               </div>
               {onNextStep && (
                 <Button
                   onClick={onNextStep}
-                  className="w-full h-12 bg-white/5 hover:bg-white/10 text-white border border-white/10 font-mono text-[10px] uppercase tracking-[0.2em]"
+                  className="w-full h-11 bg-white/5 hover:bg-white/10 text-white border border-white/10 font-mono text-[10px] uppercase tracking-[0.2em]"
                 >
                   Advance to Next Phase
                   <ArrowRight className="w-4 h-4 ml-2" />
@@ -306,7 +350,7 @@ function ExecutionCenter({
           )}
 
           {step.status === "locked" && (
-            <div className="flex-1 bg-white/5 border border-white/10 p-4 text-center flex items-center justify-center gap-2">
+            <div className="w-full bg-white/5 border border-white/10 p-3 text-center flex items-center justify-center gap-2">
               <Lock className="w-4 h-4 text-white/30" />
               <p className="text-white/30 font-mono text-sm">Complete previous steps to unlock</p>
             </div>
@@ -317,7 +361,23 @@ function ExecutionCenter({
   );
 }
 
-function IntelPanel({ step }: { step: StepWithDetails | null }) {
+function IntelPanel({
+  step,
+  onStartStep,
+  onCompleteStep,
+  onRequestApproval,
+  onNextStep,
+  isActionPending,
+  isProofSatisfied,
+}: {
+  step: StepWithDetails | null;
+  onStartStep: () => void;
+  onCompleteStep: () => void;
+  onRequestApproval: () => void;
+  onNextStep?: () => void;
+  isActionPending: boolean;
+  isProofSatisfied: boolean;
+}) {
   const [isAddingDoc, setIsAddingDoc] = useState(false);
   const [newDocTitle, setNewDocTitle] = useState("");
   const [newDocContent, setNewDocContent] = useState("");
@@ -509,38 +569,38 @@ function IntelPanel({ step }: { step: StepWithDetails | null }) {
                     />
                   </div>
                 )}
-              {!hasImagePreview && (doc.fileUrl || displayFileName) && (
-                doc.fileUrl ? (
-                  <a
-                    href={doc.fileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 flex items-center gap-3 border border-white/10 bg-emerald-900/30 px-3 py-2 text-white/80 hover:border-emerald-400/60"
-                  >
-                    <div className="flex h-7 w-7 items-center justify-center bg-red-600 text-[9px] font-bold text-white">
-                      {fileLabel}
+                {!hasImagePreview && (doc.fileUrl || displayFileName) && (
+                  doc.fileUrl ? (
+                    <a
+                      href={doc.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 flex items-center gap-3 border border-white/10 bg-emerald-900/30 px-3 py-2 text-white/80 hover:border-emerald-400/60"
+                    >
+                      <div className="flex h-7 w-7 items-center justify-center bg-red-600 text-[9px] font-bold text-white">
+                        {fileLabel}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs text-white">{displayFileName || "Attachment"}</p>
+                        <p className="text-[10px] text-white/50">
+                          {fileLabel}{fileSizeLabel ? ` - ${fileSizeLabel}` : ""}
+                        </p>
+                      </div>
+                    </a>
+                  ) : (
+                    <div className="mt-2 flex items-center gap-3 border border-white/10 bg-emerald-900/30 px-3 py-2 text-white/60">
+                      <div className="flex h-7 w-7 items-center justify-center bg-red-600 text-[9px] font-bold text-white">
+                        {fileLabel}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs text-white">{displayFileName || "Attachment"}</p>
+                        <p className="text-[10px] text-white/50">
+                          {fileLabel}{fileSizeLabel ? ` - ${fileSizeLabel}` : ""}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs text-white">{displayFileName || "Attachment"}</p>
-                      <p className="text-[10px] text-white/50">
-                        {fileLabel}{fileSizeLabel ? ` - ${fileSizeLabel}` : ""}
-                      </p>
-                    </div>
-                  </a>
-                ) : (
-                  <div className="mt-2 flex items-center gap-3 border border-white/10 bg-emerald-900/30 px-3 py-2 text-white/60">
-                    <div className="flex h-7 w-7 items-center justify-center bg-red-600 text-[9px] font-bold text-white">
-                      {fileLabel}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs text-white">{displayFileName || "Attachment"}</p>
-                      <p className="text-[10px] text-white/50">
-                        {fileLabel}{fileSizeLabel ? ` - ${fileSizeLabel}` : ""}
-                      </p>
-                    </div>
-                  </div>
-                )
-              )}
+                  )
+                )}
                 <p className="text-xs text-white/30 mt-2 font-mono">{doc.docType}</p>
               </motion.div>
             )
@@ -577,7 +637,12 @@ export default function WorkflowWorkspace() {
   const [, navigate] = useLocation();
   const workflowId = parseInt(params.id || "0");
   const [selectedStepId, setSelectedStepId] = useState<number | null>(null);
+  const [proofContent, setProofContent] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [isEditingProof, setIsEditingProof] = useState(false);
+  const proofFileInputId = useId();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const { data: workflow, isLoading: workflowLoading } = useQuery({
     queryKey: ["workflow", workflowId],
@@ -591,6 +656,13 @@ export default function WorkflowWorkspace() {
     enabled: !!selectedStepId,
   });
 
+  const isProofRequired = !!stepDetails?.proofRequired;
+  const isProofSubmitted = !!stepDetails?.proofSubmittedAt || !!stepDetails?.proofContent || !!stepDetails?.proofFilePath;
+  const isProofSatisfied = !isProofRequired || isProofSubmitted;
+  const proofTitle = stepDetails?.proofTitle || "Proof Submission";
+  const proofDescription = stepDetails?.proofDescription || "Provide evidence for this phase.";
+  const proofFileUrl = (stepDetails as any)?.proofFileUrl as string | null | undefined;
+
   // Auto-select current active step or first step
   useEffect(() => {
     if (workflow && !selectedStepId) {
@@ -602,6 +674,17 @@ export default function WorkflowWorkspace() {
       }
     }
   }, [workflow, selectedStepId]);
+
+  useEffect(() => {
+    if (!stepDetails) return;
+    setProofContent(stepDetails.proofContent || "");
+    setProofFile(null);
+    if (!stepDetails.proofRequired) {
+      setIsEditingProof(false);
+      return;
+    }
+    setIsEditingProof(!stepDetails.proofSubmittedAt);
+  }, [stepDetails]);
 
   const startMutation = useMutation({
     mutationFn: () => startStep(selectedStepId!),
@@ -628,6 +711,23 @@ export default function WorkflowWorkspace() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["step", selectedStepId] });
       queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
+    },
+  });
+
+  const submitProofMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedStepId) {
+        throw new Error("No step selected");
+      }
+      if (proofFile) {
+        return uploadStepProof(selectedStepId, { content: proofContent.trim() || undefined, file: proofFile });
+      }
+      return submitStepProof(selectedStepId, { content: proofContent.trim() || undefined });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["step", selectedStepId] });
+      setProofFile(null);
+      setIsEditingProof(false);
     },
   });
 
@@ -659,7 +759,7 @@ export default function WorkflowWorkspace() {
             onClick={() => navigate("/")}
             className="mt-4 text-primary"
           >
-            Return to Mission Control
+            Return Home
           </Button>
         </div>
       </div>
@@ -677,7 +777,7 @@ export default function WorkflowWorkspace() {
           data-testid="button-back"
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
-          Mission Control
+          Home
         </Button>
 
         <div className="flex-1 flex items-center justify-center gap-3">
@@ -689,8 +789,18 @@ export default function WorkflowWorkspace() {
           <span className="font-mono text-xs text-white/40 uppercase tracking-widest">Active Session</span>
         </div>
 
-        <div className="text-xs font-mono text-white/40">
-          Step {workflow.currentStep} of {workflow.totalSteps}
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/missions/${workflowId}/manage`)}
+            className="text-white/50 hover:text-primary"
+          >
+            Manage
+          </Button>
+          <div className="text-xs font-mono text-white/40">
+            Step {workflow.currentStep} of {workflow.totalSteps}
+          </div>
         </div>
       </header>
 
@@ -716,8 +826,22 @@ export default function WorkflowWorkspace() {
         >
           <ExecutionCenter
             step={stepDetails || null}
-            workflowId={workflowId}
             isLoading={stepLoading}
+            proofTitle={proofTitle}
+            proofDescription={proofDescription}
+            proofContent={proofContent}
+            onProofContentChange={setProofContent}
+            proofFile={proofFile}
+            proofFileUrl={proofFileUrl}
+            onSelectProofFile={setProofFile}
+            isProofRequired={isProofRequired}
+            isProofSubmitted={isProofSubmitted}
+            isEditingProof={isEditingProof}
+            onToggleEditProof={() => setIsEditingProof(true)}
+            onSubmitProof={() => submitProofMutation.mutate()}
+            canEditProof={!!user}
+            isSubmittingProof={submitProofMutation.isPending}
+            proofFileInputId={proofFileInputId}
             onStartStep={() => startMutation.mutate()}
             onCompleteStep={() => completeMutation.mutate()}
             onRequestApproval={() => approvalMutation.mutate()}
@@ -729,6 +853,7 @@ export default function WorkflowWorkspace() {
               return undefined;
             })()}
             isActionPending={startMutation.isPending || completeMutation.isPending || approvalMutation.isPending}
+            isProofSatisfied={isProofSatisfied}
           />
         </motion.div>
 
@@ -738,7 +863,21 @@ export default function WorkflowWorkspace() {
           transition={{ delay: 0.2 }}
           className="w-80 shrink-0"
         >
-          <IntelPanel step={stepDetails || null} />
+          <IntelPanel
+            step={stepDetails || null}
+            onStartStep={() => startMutation.mutate()}
+            onCompleteStep={() => completeMutation.mutate()}
+            onRequestApproval={() => approvalMutation.mutate()}
+            onNextStep={(() => {
+              const currentIndex = workflow.steps.findIndex(s => s.id === selectedStepId);
+              if (currentIndex !== -1 && currentIndex < workflow.steps.length - 1) {
+                return () => setSelectedStepId(workflow.steps[currentIndex + 1].id);
+              }
+              return undefined;
+            })()}
+            isActionPending={startMutation.isPending || completeMutation.isPending || approvalMutation.isPending}
+            isProofSatisfied={isProofSatisfied}
+          />
         </motion.div>
       </div>
     </div>

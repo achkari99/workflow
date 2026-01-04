@@ -6,7 +6,10 @@ import {
   getCompositeSessionMessages,
   updateCompositeSessionStep,
   updateCompositeSessionStepContent,
+  updateCompositeSessionMember,
   addCompositeSessionIntel,
+  submitSessionProof,
+  uploadSessionProof,
   sendCompositeSessionMessage,
   markCompositeSessionMessagesRead,
   deleteCompositeSessionMessage,
@@ -27,6 +30,7 @@ import {
   Edit3,
   Trash2,
   X,
+  Smile,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type {
@@ -80,6 +84,7 @@ export default function CompositeSessionPage() {
   const { user } = useAuth();
   const sessionId = parseInt(params.id || "0", 10);
   const fileInputId = useId();
+  const proofFileInputId = useId();
 
   const { data: session, isLoading } = useQuery<CompositeSessionPayload>({
     queryKey: ["composite-session", sessionId],
@@ -100,18 +105,104 @@ export default function CompositeSessionPage() {
   useEffect(() => {
     if (!sessionId) return;
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    setWsStatus("connecting");
     const ws = new WebSocket(`${protocol}://${window.location.host}/ws`);
     ws.addEventListener("open", () => {
+      setWsStatus("open");
       ws.send(JSON.stringify({ type: "session:subscribe", sessionId }));
+      setLastWsEvent("subscribe_sent");
     });
-    ws.addEventListener("message", () => {
-      queryClient.invalidateQueries({ queryKey: ["composite-session", sessionId] });
-      queryClient.invalidateQueries({ queryKey: ["composite-session-messages", sessionId] });
+    ws.addEventListener("error", () => {
+      setWsStatus("error");
+    });
+    ws.addEventListener("close", () => {
+      setWsStatus("closed");
+    });
+    ws.addEventListener("message", (event) => {
+      const handle = async () => {
+        let raw = "";
+        if (typeof event.data === "string") {
+          raw = event.data;
+        } else if (event.data?.text) {
+          raw = await event.data.text();
+        } else if (event.data?.toString) {
+          raw = event.data.toString();
+        }
+        if (!raw) return;
+        setLastWsEvent("message_received");
+        try {
+          const payload = JSON.parse(raw);
+          setLastWsEvent(payload?.type || "message");
+          if (payload?.type === "session:chat_message" && payload.message) {
+            queryClient.setQueryData(
+              ["composite-session-messages", sessionId],
+              (data: SessionChatMessage[] | undefined) => {
+                const existing = data || [];
+                const already = existing.some((item) => item.id === payload.message.id);
+                if (already) return existing;
+                if (payload.message.userId === user?.id) {
+                  const trimmed = String(payload.message.content || "").trim();
+                  const withoutTemp = existing.filter((item) => {
+                    if (item.id >= 0) return true;
+                    const sameContent = String(item.content || "").trim() === trimmed;
+                    const timeGap = Math.abs(new Date(item.createdAt).getTime() - new Date(payload.message.createdAt).getTime());
+                    return !(sameContent && timeGap < 60_000);
+                  });
+                  return [...withoutTemp, payload.message];
+                }
+                return [...existing, payload.message];
+              }
+            );
+            return;
+          }
+          if (payload?.type === "session:chat_deleted" && payload.messageId) {
+            queryClient.setQueryData(
+              ["composite-session-messages", sessionId],
+              (data: SessionChatMessage[] | undefined) =>
+                (data || []).filter((item) => item.id !== payload.messageId)
+            );
+            return;
+          }
+          if (payload?.type === "session:chat_read" && Array.isArray(payload.messageIds)) {
+            const reader = session?.members.find((member) => member.userId === payload.userId)?.user || null;
+            queryClient.setQueryData(
+              ["composite-session-messages", sessionId],
+              (data: SessionChatMessage[] | undefined) => {
+                if (!data) return data;
+                return data.map((message) => {
+                  if (!payload.messageIds.includes(message.id)) return message;
+                  const existingReads = message.reads || [];
+                  if (existingReads.some((read) => read.userId === payload.userId)) return message;
+                  return {
+                    ...message,
+                    reads: [
+                      ...existingReads,
+                      {
+                        id: Date.now(),
+                        messageId: message.id,
+                        userId: payload.userId,
+                        readAt: new Date().toISOString(),
+                        user: reader,
+                      },
+                    ],
+                  };
+                });
+              }
+            );
+            return;
+          }
+        } catch {
+          // no-op
+        }
+        queryClient.invalidateQueries({ queryKey: ["composite-session", sessionId] });
+        queryClient.invalidateQueries({ queryKey: ["composite-session-messages", sessionId] });
+      };
+      void handle();
     });
     return () => {
       ws.close();
     };
-  }, [sessionId, queryClient]);
+  }, [sessionId, queryClient, session?.members]);
 
   const [selectedStepId, setSelectedStepId] = useState<number | null>(null);
   const [isAddingDoc, setIsAddingDoc] = useState(false);
@@ -124,6 +215,13 @@ export default function CompositeSessionPage() {
   const [editObjective, setEditObjective] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
   const [chatInput, setChatInput] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [wsStatus, setWsStatus] = useState<"idle" | "connecting" | "open" | "closed" | "error">("idle");
+  const [lastWsEvent, setLastWsEvent] = useState<string>("");
+  const [activeCenterView, setActiveCenterView] = useState<"chat" | "submission">("chat");
+  const [proofContent, setProofContent] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [isEditingProof, setIsEditingProof] = useState(false);
   const [lastReadMessageId, setLastReadMessageId] = useState<number | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
 
@@ -131,6 +229,7 @@ export default function CompositeSessionPage() {
   const isOwner = !!(session?.ownerId && session.ownerId === user?.id);
   const canEditSteps = isOwner || !!currentMember?.canEditSteps;
   const canEditIntel = isOwner || !!currentMember?.canEditIntel;
+  const canEditProof = isOwner || !!currentMember?.canEditProof;
   const canChat = isOwner || !!currentMember?.canChat;
 
   const compositeSteps = session?.composite?.steps || [];
@@ -141,7 +240,7 @@ export default function CompositeSessionPage() {
   }, [session?.sessionSteps]);
 
   const assignmentsByStep = useMemo(() => {
-    const map = new Map<number, CompositeWorkflowSessionAssignment[]>();
+    const map = new Map<number, (CompositeWorkflowSessionAssignment & { delegates?: CompositeWorkflowSessionAssignmentDelegate[] })[]>();
     session?.assignments.forEach((assignment) => {
       const list = map.get(assignment.stepId) || [];
       list.push(assignment);
@@ -151,7 +250,7 @@ export default function CompositeSessionPage() {
   }, [session?.assignments]);
 
   const assignmentsByUser = useMemo(() => {
-    const map = new Map<string, CompositeWorkflowSessionAssignment[]>();
+    const map = new Map<string, (CompositeWorkflowSessionAssignment & { delegates?: CompositeWorkflowSessionAssignmentDelegate[] })[]>();
     session?.assignments.forEach((assignment) => {
       const list = map.get(assignment.assigneeUserId) || [];
       list.push(assignment);
@@ -181,6 +280,10 @@ export default function CompositeSessionPage() {
   const accessibleStepIds = useMemo(() => {
     if (!user?.id) return new Set<number>();
     const accessible = new Set<number>();
+    if (isOwner) {
+      compositeSteps.forEach(s => accessible.add(s.id));
+      return accessible;
+    }
     const assignedToUser = new Set((assignmentsByUser.get(user.id) || []).map((a) => a.stepId));
     const nextForUser = laneNextStep.get(user.id) || null;
 
@@ -237,6 +340,13 @@ export default function CompositeSessionPage() {
   const selectedStep = compositeSteps.find((step) => step.id === selectedStepId) || null;
   const selectedSessionStep = selectedStepId ? sessionStepsByStepId.get(selectedStepId) : null;
   const isPhaseCompleted = !!selectedSessionStep?.isCompleted;
+  const isProofRequired = !!selectedSessionStep?.proofRequired;
+  const isProofSatisfied = !isProofRequired || !!selectedSessionStep?.proofContent || !!selectedSessionStep?.proofFilePath;
+  const isProofSubmitted = !!selectedSessionStep?.proofSubmittedAt || !!selectedSessionStep?.proofContent || !!selectedSessionStep?.proofFilePath;
+  const proofTitle = selectedSessionStep?.proofTitle || "Proof Submission";
+  const proofDescription = selectedSessionStep?.proofDescription || "Provide evidence for this phase.";
+  const proofFileUrl = (selectedSessionStep as any)?.proofFileUrl as string | null | undefined;
+  const emojiOptions = ["😀", "😅", "🙂", "👍", "🎯", "🚀", "🔥", "✅"];
   const selectedAssignments = selectedStepId ? assignmentsByStep.get(selectedStepId) || [] : [];
   const visibleIntelDocs = useMemo(
     () => (session?.intelDocs || []).filter((doc) => doc.stepId === selectedStepId),
@@ -253,6 +363,17 @@ export default function CompositeSessionPage() {
     setEditObjective(selectedStep.objective || "");
     setEditInstructions(selectedStep.instructions || "");
   }, [selectedStep]);
+
+  useEffect(() => {
+    if (!selectedSessionStep) return;
+    setProofContent(selectedSessionStep.proofContent || "");
+    setProofFile(null);
+    if (!selectedSessionStep.proofRequired) {
+      setIsEditingProof(false);
+      return;
+    }
+    setIsEditingProof(!selectedSessionStep.proofSubmittedAt);
+  }, [selectedSessionStep]);
 
   const isStepUnlockedForUser = (userId: string, stepId: number) => laneNextStep.get(userId) === stepId;
 
@@ -332,16 +453,84 @@ export default function CompositeSessionPage() {
     },
   });
 
-  const sendMessageMutation = useMutation({
-    mutationFn: () => sendCompositeSessionMessage(sessionId, chatInput.trim()),
+  const submitProofMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedSessionStep) {
+        throw new Error("No session step selected");
+      }
+      if (proofFile) {
+        return uploadSessionProof(sessionId, selectedSessionStep.id, {
+          content: proofContent.trim() || undefined,
+          file: proofFile,
+        });
+      }
+      return submitSessionProof(sessionId, selectedSessionStep.id, {
+        content: proofContent.trim() || undefined,
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["composite-session-messages", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["composite-session", sessionId] });
+      setProofFile(null);
+      setIsEditingProof(false);
+    },
+  });
+
+  const sendMessageMutation = useMutation({
+    mutationFn: (content: string) => sendCompositeSessionMessage(sessionId, content),
+    onMutate: async (content: string) => {
+      await queryClient.cancelQueries({ queryKey: ["composite-session-messages", sessionId] });
+      const previous = queryClient.getQueryData<SessionChatMessage[]>(["composite-session-messages", sessionId]) || [];
+      const tempId = -Date.now();
+      const optimistic: SessionChatMessage = {
+        id: tempId,
+        sessionId,
+        userId: user?.id || "me",
+        content,
+        createdAt: new Date(),
+          user: currentMember?.user || (user ? { id: user.id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName, profileImageUrl: user.profileImageUrl } : null),
+          reads: [],
+        };
+      queryClient.setQueryData(["composite-session-messages", sessionId], [...previous, optimistic]);
       setChatInput("");
+      return { previous, tempId };
+    },
+    onError: (_err, _content, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["composite-session-messages", sessionId], context.previous);
+      }
+    },
+    onSuccess: (message, _content, context) => {
+      queryClient.setQueryData(
+        ["composite-session-messages", sessionId],
+        (data: SessionChatMessage[] | undefined) => {
+          const existing = data || [];
+          if (context?.tempId == null) {
+            return existing;
+          }
+          const withoutTemp = existing.filter((item) => item.id !== context.tempId);
+          const already = withoutTemp.some((item) => item.id === message.id);
+          return already ? withoutTemp : [...withoutTemp, message];
+        }
+      );
     },
   });
 
   const deleteMessageMutation = useMutation({
     mutationFn: (messageId: number) => deleteCompositeSessionMessage(sessionId, messageId),
+    onMutate: async (messageId: number) => {
+      await queryClient.cancelQueries({ queryKey: ["composite-session-messages", sessionId] });
+      const previous = queryClient.getQueryData<SessionChatMessage[]>(["composite-session-messages", sessionId]) || [];
+      queryClient.setQueryData(
+        ["composite-session-messages", sessionId],
+        previous.filter((message) => message.id !== messageId)
+      );
+      return { previous };
+    },
+    onError: (_err, _messageId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["composite-session-messages", sessionId], context.previous);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["composite-session-messages", sessionId] });
     },
@@ -403,41 +592,59 @@ export default function CompositeSessionPage() {
   return (
     <div className="min-h-screen bg-black text-foreground flex flex-col">
       <header className="h-16 border-b border-white/5 bg-black/60 flex items-center justify-between px-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => window.history.back()}
-          className="text-white/40 hover:text-white"
-        >
-          <ChevronLeft className="w-4 h-4 mr-1" />
-          Protocols
-        </Button>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-xs font-mono text-white/40 uppercase tracking-widest">
-            <Users className="w-4 h-4" />
-            Session
-          </div>
-          <div className="text-white font-display text-sm">{session.name || session.composite.name}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          {session.members.map((member) => (
-            <div key={member.id} className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: member.laneColor }} />
-              <span className="text-[10px] text-white/40 font-mono uppercase">
-                {getDisplayName(member)}
-              </span>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/sessions`)}
+              className="text-white/40 hover:text-white"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Back to Sessions
+            </Button>
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                <Users className="w-3 h-3" />
+                Session
+              </div>
+              <div className="text-white font-display text-sm">{session.name || session.composite.name}</div>
             </div>
-          ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(`/composite-sessions/${session.id}/manage`)}
-            className="text-white/50 hover:text-primary"
-          >
-            Manage
-          </Button>
-        </div>
-      </header>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveCenterView("chat")}
+              className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest border ${activeCenterView === "chat" ? "border-primary/60 text-primary bg-primary/10" : "border-white/10 text-white/40 hover:text-white"
+                }`}
+            >
+              Chat
+            </button>
+            <button
+              onClick={() => setActiveCenterView("submission")}
+              className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest border ${activeCenterView === "submission" ? "border-primary/60 text-primary bg-primary/10" : "border-white/10 text-white/40 hover:text-white"
+                }`}
+            >
+              Submission
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            {session.members.map((member) => (
+              <div key={member.id} className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: member.laneColor }} />
+                <span className="text-[10px] text-white/40 font-mono uppercase">
+                  {getDisplayName(member)}
+                </span>
+              </div>
+            ))}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/sessions/${session.id}/manage`)}
+              className="text-white/50 hover:text-primary"
+            >
+              Manage
+            </Button>
+          </div>
+        </header>
 
       <div className="flex-1 grid grid-cols-[300px_1fr_340px]">
         <aside className="border-r border-white/5 bg-black/60 overflow-y-auto">
@@ -507,7 +714,7 @@ export default function CompositeSessionPage() {
         </aside>
 
         <main className="bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-white/[0.03] to-transparent overflow-y-auto">
-          <div className="p-8 border-b border-white/5">
+          <div className="px-6 py-4 border-b border-white/5">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="px-2 py-0.5 bg-primary/10 border border-primary/20 text-[10px] font-mono text-primary uppercase tracking-widest">
@@ -525,8 +732,8 @@ export default function CompositeSessionPage() {
                     onClick={() => toggleLaneDelegationMutation.mutate()}
                     className="text-[10px] text-white/40 hover:text-primary"
                   >
-                    {currentMember.allowLaneDelegation ? "Lock My Lane" : "Open My Lane"}
-                  </Button>
+                      {currentMember.allowLaneDelegation ? "Lane Opened" : "Open My Lane"}
+                    </Button>
                 )}
                 {selectedStep && canEditSteps && (
                   <Button
@@ -541,112 +748,240 @@ export default function CompositeSessionPage() {
                 )}
               </div>
             </div>
-            <h1 className="text-3xl font-display text-white mt-4">{selectedStep ? selectedStep.name : "Select a phase"}</h1>
-            {selectedStep?.description && (
-              <p className="text-white/50 mt-2 max-w-2xl">{selectedStep.description}</p>
-            )}
-            {selectedSessionStep?.isCompleted && completedByMember && (
-              <div className="mt-4 flex items-center gap-2 text-xs text-white/50 font-mono uppercase tracking-widest">
-                <span>Completed by</span>
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: completedByMember.laneColor }} />
-                  {getDisplayName(completedByMember)}
-                </span>
+              <div className="mt-3 flex items-start justify-between gap-6">
+                <h1 className="text-2xl font-display text-white">{selectedStep ? selectedStep.name : "Select a phase"}</h1>
+                {(selectedStep?.description || (selectedSessionStep?.isCompleted && completedByMember)) && (
+                  <div className="text-right max-w-xs">
+                    {selectedStep?.description && (
+                      <p className="text-white/50 text-sm">{selectedStep.description}</p>
+                    )}
+                    {selectedSessionStep?.isCompleted && completedByMember && (
+                      <div className="mt-2 flex items-center justify-end gap-2 text-xs text-white/50 font-mono uppercase tracking-widest">
+                        <span>Completed by</span>
+                        <span className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: completedByMember.laneColor }} />
+                          {getDisplayName(completedByMember)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
           </div>
 
           <div className="p-8">
-            <div className="bg-black/40 border border-white/5 flex flex-col min-h-[420px] max-h-[calc(100vh-260px)]">
-              <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Session Chat</p>
-                  <p className="text-sm text-white/70">{session.name || session.composite.name}</p>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-3 text-[10px] font-mono text-white/40 uppercase">
-                  {session.members.map((member) => (
-                    <span key={member.id} className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: member.laneColor }} />
-                      {getDisplayName(member)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div ref={chatListRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-                {messagesLoading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                  </div>
-                ) : !messages || messages.length === 0 ? (
-                  <div className="text-center py-10 text-xs text-white/40 font-mono uppercase tracking-widest">
-                    No messages yet
-                  </div>
-                ) : (
-                  messages.map((message) => {
-                    const isOwn = message.userId === user?.id;
-                    const author = message.user;
-                    const authorName = author ? (author.firstName || author.username || author.email || message.userId) : message.userId;
-                    const readBy = (message.reads || [])
-                      .filter((read) => read.userId !== message.userId)
-                      .map((read) => read.user?.firstName || read.user?.username || read.user?.email || read.userId);
-                    const maxSeen = 3;
-                    const seenNames = readBy.slice(0, maxSeen);
-                    const seenLabel = isOwn && readBy.length > 0
-                      ? `Seen by ${seenNames.join(", ")}${readBy.length > maxSeen ? ` +${readBy.length - maxSeen}` : ""}`
-                      : null;
-                    return (
-                      <div key={message.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[70%] border px-4 py-3 ${isOwn ? "border-primary/40 bg-primary/10 text-white" : "border-white/10 bg-white/5 text-white/80"}`}>
-                          <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-white/40 uppercase tracking-widest">
-                            <span>{authorName}</span>
-                            <div className="flex items-center gap-2">
-                              <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                              {(isOwn || isOwner) && (
-                                <button
-                                  onClick={() => deleteMessageMutation.mutate(message.id)}
-                                  className="text-white/40 hover:text-red-400"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
+            {activeCenterView === "chat" ? (
+              <div className="bg-black/40 border border-white/5 flex flex-col min-h-[480px] max-h-[calc(100vh-220px)]">
+                <div ref={chatListRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                  {messagesLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    </div>
+                  ) : !messages || messages.length === 0 ? (
+                    <div className="text-center py-10 text-xs text-white/40 font-mono uppercase tracking-widest">
+                      No messages yet
+                    </div>
+                  ) : (
+                    messages.map((message) => {
+                        const isOwn = message.userId === user?.id;
+                        const author = message.user;
+                        const authorName = author ? (author.firstName || author.username || author.email || message.userId) : message.userId;
+                        const authorId = author?.id || message.userId;
+                        const authorInitials = (authorName || "U").slice(0, 1).toUpperCase();
+                        const authorAvatar = author?.profileImageUrl || "";
+                        const readBy = (message.reads || [])
+                          .filter((read) => read.userId !== message.userId && read.userId !== user?.id)
+                          .map((read) => read.user?.firstName || read.user?.username || read.user?.email || read.userId);
+                        const maxSeen = 3;
+                        const seenNames = readBy.slice(0, maxSeen);
+                        const seenLabel = isOwn && readBy.length > 0
+                          ? `Seen by ${seenNames.join(", ")}${readBy.length > maxSeen ? ` +${readBy.length - maxSeen}` : ""}`
+                          : null;
+                        return (
+                          <div key={message.id} className={`flex items-start gap-3 ${isOwn ? "justify-end" : "justify-start"}`}>
+                            {!isOwn && (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/profile/${authorId}`)}
+                                className="h-9 w-9 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-xs font-mono text-white/60 overflow-hidden"
+                                aria-label={`View ${authorName} profile`}
+                              >
+                                {authorAvatar ? (
+                                  <img src={authorAvatar} alt={authorName} className="h-full w-full object-cover" />
+                                ) : (
+                                  authorInitials
+                                )}
+                              </button>
+                            )}
+                            <div className={`max-w-[70%] border px-4 py-3 ${isOwn ? "border-primary/40 bg-primary/10 text-white" : "border-white/10 bg-white/5 text-white/80"}`}>
+                              <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                                <span>{authorName}</span>
+                                <div className="flex items-center gap-2">
+                                  <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                  {(isOwn || isOwner) && (
+                                    <button
+                                      onClick={() => deleteMessageMutation.mutate(message.id)}
+                                      className="text-white/40 hover:text-red-400"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="mt-2 text-sm whitespace-pre-wrap">{message.content}</p>
+                              {seenLabel && (
+                                <p className="mt-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
+                                  {seenLabel}
+                                </p>
                               )}
                             </div>
+                            {isOwn && (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/profile/${authorId}`)}
+                                className="h-9 w-9 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-xs font-mono text-white/60 overflow-hidden"
+                                aria-label={`View ${authorName} profile`}
+                              >
+                                {authorAvatar ? (
+                                  <img src={authorAvatar} alt={authorName} className="h-full w-full object-cover" />
+                                ) : (
+                                  authorInitials
+                                )}
+                              </button>
+                            )}
                           </div>
-                          <p className="mt-2 text-sm whitespace-pre-wrap">{message.content}</p>
-                          {seenLabel && (
-                            <p className="mt-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
-                              {seenLabel}
-                            </p>
-                          )}
-                        </div>
+                        );
+                      })
+                    )}
+                </div>
+                <div className="border-t border-white/5 p-4 flex items-center gap-3 relative">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowEmojiPicker((prev) => !prev)}
+                      className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-white/60 hover:text-white hover:border-white/30 flex items-center justify-center"
+                      aria-label="Add emoji"
+                    >
+                      <Smile className="w-4 h-4" />
+                    </button>
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-12 left-0 z-20 border border-white/10 bg-black/90 p-2 grid grid-cols-4 gap-2 shadow-[0_10px_40px_rgba(0,0,0,0.45)]">
+                        {emojiOptions.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => {
+                              setChatInput((prev) => `${prev}${emoji}`);
+                              setShowEmojiPicker(false);
+                            }}
+                            className="h-8 w-8 flex items-center justify-center text-lg hover:bg-white/10"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
                       </div>
-                    );
-                  })
-                )}
+                    )}
+                  </div>
+                  <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && chatInput.trim()) {
+                        e.preventDefault();
+                        if (!canChat) return;
+                        sendMessageMutation.mutate(chatInput.trim());
+                      }
+                    }}
+                    placeholder={canChat ? "Write a message..." : "Chat permissions required"}
+                    disabled={!canChat}
+                    className="flex-1 bg-black/30 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
+                  />
+                  <Button
+                    onClick={() => sendMessageMutation.mutate(chatInput.trim())}
+                    disabled={!canChat || !chatInput.trim() || sendMessageMutation.isPending}
+                    className="h-9 w-9 p-0 bg-primary text-black hover:bg-primary/90"
+                  >
+                    {sendMessageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </div>
               </div>
-              <div className="border-t border-white/5 p-4 flex items-center gap-3">
-                <input
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && chatInput.trim()) {
-                      e.preventDefault();
-                      if (!canChat) return;
-                      sendMessageMutation.mutate();
+            ) : (
+              <div className="bg-black/40 border border-white/5 flex flex-col min-h-[480px] max-h-[calc(100vh-220px)]">
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                  <div className="border border-white/10 bg-white/5 p-4">
+                    <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Proof Brief</p>
+                    <h3 className="text-lg text-white mt-2">{proofTitle}</h3>
+                    <p className="text-sm text-white/50 mt-2">{proofDescription}</p>
+                    {!isProofRequired && (
+                      <p className="text-xs text-white/30 mt-3 font-mono uppercase tracking-widest">
+                        Proof not required for this phase.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="border border-white/10 bg-white/5 p-4 space-y-3">
+                    <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Your Submission</p>
+                    <textarea
+                      value={proofContent}
+                      onChange={(e) => setProofContent(e.target.value)}
+                      placeholder={isProofRequired ? "Write your proof..." : "No proof needed"}
+                      disabled={!canEditProof || !isProofRequired || (!isEditingProof && isProofSubmitted)}
+                      className="w-full bg-black/30 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[160px] resize-none disabled:opacity-40"
+                    />
+                    {(proofFile || proofFileUrl) && (
+                      <div className="text-xs text-white/50">
+                        {proofFileUrl ? (
+                          <a href={proofFileUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                            View current attachment
+                          </a>
+                        ) : (
+                          <span>Selected file: {proofFile?.name}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="border-t border-white/5 p-4 flex items-center gap-2">
+                  <Button
+                    onClick={() => {
+                      if (!isProofRequired) return;
+                      if (isProofSubmitted && !isEditingProof) {
+                        setIsEditingProof(true);
+                        return;
+                      }
+                      submitProofMutation.mutate();
+                    }}
+                    disabled={
+                      !isProofRequired ||
+                      !canEditProof ||
+                      submitProofMutation.isPending ||
+                      (!(isProofSubmitted && !isEditingProof) && !proofContent.trim() && !proofFile)
                     }
-                  }}
-                  placeholder={canChat ? "Write a message..." : "Chat permissions required"}
-                  disabled={!canChat}
-                  className="flex-1 bg-black/30 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
-                />
-                <Button
-                  onClick={() => sendMessageMutation.mutate()}
-                  disabled={!canChat || !chatInput.trim() || sendMessageMutation.isPending}
-                  className="h-9 w-9 p-0 bg-primary text-black hover:bg-primary/90"
-                >
-                  {sendMessageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                </Button>
+                    className="flex-1 h-11 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
+                  >
+                    {submitProofMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : null}
+                    {isProofSubmitted && !isEditingProof ? "Edit Proofs" : "Submit Proofs"}
+                  </Button>
+                  <label
+                    htmlFor={proofFileInputId}
+                    className={`h-11 px-4 border border-white/10 text-xs font-mono uppercase tracking-widest flex items-center justify-center cursor-pointer ${!isProofRequired || !canEditProof || (isProofSubmitted && !isEditingProof) ? "opacity-40 cursor-not-allowed" : "hover:border-primary/50"
+                      }`}
+                  >
+                    Upload
+                  </label>
+                  <input
+                    id={proofFileInputId}
+                    type="file"
+                    accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/json,text/*,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                    onChange={(e) => setProofFile(e.target.files?.[0] || null)}
+                    disabled={!isProofRequired || !canEditProof || (isProofSubmitted && !isEditingProof)}
+                    className="hidden"
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </main>
 
@@ -840,7 +1175,7 @@ export default function CompositeSessionPage() {
           <div className="border-t border-white/5 p-4">
             <Button
               onClick={() => completeMutation.mutate()}
-              disabled={!selectedStepId || isPhaseCompleted || !canCompleteSelectedStep || completeMutation.isPending}
+              disabled={!selectedStepId || isPhaseCompleted || !canCompleteSelectedStep || completeMutation.isPending || !isProofSatisfied}
               className={`w-full h-12 font-mono uppercase tracking-widest ${isPhaseCompleted ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" : "bg-primary hover:bg-primary/90 text-black"}`}
             >
               {completeMutation.isPending ? (

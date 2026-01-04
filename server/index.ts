@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { setupAuth } from "./auth";
 import { setupRealtime } from "./realtime";
+import { pool } from "./db";
 
 const app = express();
 const httpServer = createServer(app);
@@ -16,6 +17,7 @@ declare module "http" {
 
 app.use(
   express.json({
+    limit: "5mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
@@ -62,6 +64,12 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  try {
+    await pool.query("ALTER TABLE users ALTER COLUMN profile_image_url TYPE text");
+  } catch (error) {
+    log(`profile image column update skipped: ${(error as Error).message}`);
+  }
+
   await setupAuth(app);
   await registerRoutes(httpServer, app);
   setupRealtime(httpServer);

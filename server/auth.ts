@@ -151,6 +151,50 @@ export async function setupAuth(app: Express) {
     }
     res.json(req.user);
   });
+
+  app.get("/api/users/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    try {
+      const user = await authStorage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const { password, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (error) {
+      console.error("Profile Fetch Error:", error);
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+
+  app.patch("/api/user", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const { firstName, lastName, email, username, profileImageUrl } = req.body || {};
+    const updates: Partial<Pick<SelectUser, "firstName" | "lastName" | "email" | "username" | "profileImageUrl">> = {};
+
+    if (typeof firstName === "string") updates.firstName = firstName || null;
+    if (typeof lastName === "string") updates.lastName = lastName || null;
+    if (typeof email === "string") updates.email = email || null;
+    if (typeof username === "string") updates.username = username || null;
+    if (typeof profileImageUrl === "string") updates.profileImageUrl = profileImageUrl || null;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "No valid fields to update" });
+    }
+
+    try {
+      const user = await authStorage.updateUser(req.user!.id, updates);
+      res.json(user);
+    } catch (error) {
+      console.error("Profile Update Error:", error);
+      res.status(400).json({ message: "Profile update failed" });
+    }
+  });
 }
 
 export function isAuthenticated(req: Request, res: Response, next: NextFunction) {

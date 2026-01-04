@@ -148,11 +148,11 @@ export default function WorkflowList() {
           data-testid="button-back"
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
-          Mission Control
+          Home
         </Button>
         
         <Button
-          onClick={() => navigate("/workflows/new")}
+          onClick={() => navigate("/missions/new")}
           className="bg-primary hover:bg-primary/90 text-black"
           data-testid="button-new-workflow"
         >
@@ -168,7 +168,7 @@ export default function WorkflowList() {
           className="mb-12"
         >
           <h1 className="font-display text-4xl text-white tracking-wide">All Missions</h1>
-          <p className="text-white/40 mt-2">Manage and track all your workflows</p>
+          <p className="text-white/40 mt-2">Manage and track all your missions</p>
         </motion.div>
 
         {isLoading ? (
@@ -184,7 +184,7 @@ export default function WorkflowList() {
             <Target className="w-16 h-16 text-white/10 mx-auto mb-4" />
             <p className="text-white/40 mb-4">No missions found</p>
             <Button
-              onClick={() => navigate("/workflows/new")}
+              onClick={() => navigate("/missions/new")}
               className="bg-primary hover:bg-primary/90 text-black"
             >
               <Plus className="w-4 h-4 mr-2" />

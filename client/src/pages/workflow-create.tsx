@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createWorkflow, setActiveWorkflow } from "@/lib/api";
@@ -22,6 +22,23 @@ export default function WorkflowCreate() {
   const [description, setDescription] = useState("");
   const [totalSteps, setTotalSteps] = useState(5);
   const [priority, setPriority] = useState("high");
+  const [proofConfig, setProofConfig] = useState<{ proofRequired: boolean; proofTitle: string; proofDescription: string }[]>(
+    Array.from({ length: 5 }, () => ({ proofRequired: false, proofTitle: "", proofDescription: "" }))
+  );
+
+  useEffect(() => {
+    setProofConfig((prev) => {
+      const next = [...prev];
+      if (totalSteps > next.length) {
+        for (let i = next.length; i < totalSteps; i += 1) {
+          next.push({ proofRequired: false, proofTitle: "", proofDescription: "" });
+        }
+      } else if (totalSteps < next.length) {
+        next.length = totalSteps;
+      }
+      return next;
+    });
+  }, [totalSteps]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -33,6 +50,7 @@ export default function WorkflowCreate() {
         isActive: false,
         status: "active",
         priority,
+        proofConfig,
       });
       await setActiveWorkflow(workflow.id);
       return workflow;
@@ -62,7 +80,7 @@ export default function WorkflowCreate() {
           data-testid="button-back"
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
-          Mission Control
+          Home
         </Button>
       </header>
 
@@ -77,7 +95,7 @@ export default function WorkflowCreate() {
             </div>
             <div>
               <h1 className="font-display text-3xl text-white tracking-wide">New Mission</h1>
-              <p className="text-white/40 text-sm mt-1">Create a new workflow to track</p>
+              <p className="text-white/40 text-sm mt-1">Create a new mission to track</p>
             </div>
           </div>
 
@@ -140,6 +158,68 @@ export default function WorkflowCreate() {
                 >
                   <Plus className="w-4 h-4" />
                 </Button>
+              </div>
+            </div>
+
+            <div className="border border-white/10 bg-black/30 p-4">
+              <div className="flex items-center justify-between mb-4">
+                <label className="text-xs font-mono text-white/40 uppercase tracking-widest">
+                  Proof Requirements
+                </label>
+                <span className="text-[10px] text-white/30 font-mono uppercase tracking-widest">Optional</span>
+              </div>
+              <div className="space-y-3">
+                {proofConfig.map((config, index) => (
+                  <div key={`proof-step-${index}`} className="border border-white/10 bg-white/5 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                        Step {index + 1}
+                      </span>
+                      <label className="flex items-center gap-2 text-[10px] font-mono text-white/50 uppercase tracking-widest">
+                        <input
+                          type="checkbox"
+                          checked={config.proofRequired}
+                          onChange={(e) =>
+                            setProofConfig((prev) =>
+                              prev.map((item, idx) =>
+                                idx === index ? { ...item, proofRequired: e.target.checked } : item
+                              )
+                            )
+                          }
+                        />
+                        Require proof
+                      </label>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <input
+                        value={config.proofTitle}
+                        onChange={(e) =>
+                          setProofConfig((prev) =>
+                            prev.map((item, idx) =>
+                              idx === index ? { ...item, proofTitle: e.target.value } : item
+                            )
+                          )
+                        }
+                        placeholder="Proof title"
+                        disabled={!config.proofRequired}
+                        className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary disabled:opacity-40"
+                      />
+                      <textarea
+                        value={config.proofDescription}
+                        onChange={(e) =>
+                          setProofConfig((prev) =>
+                            prev.map((item, idx) =>
+                              idx === index ? { ...item, proofDescription: e.target.value } : item
+                            )
+                          )
+                        }
+                        placeholder="Proof description"
+                        disabled={!config.proofRequired}
+                        className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[80px] resize-none disabled:opacity-40"
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
