@@ -19,6 +19,7 @@ import {
   getComposites,
   updateSessionProofConfig,
   deleteSessionProof,
+  updateStep,
   searchUsers,
 } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
@@ -83,8 +84,9 @@ export default function CompositeSessionsPage() {
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
   const [proofStepId, setProofStepId] = useState<number | null>(null);
   const [proofRequired, setProofRequired] = useState(false);
-  const [proofTitle, setProofTitle] = useState("");
-  const [proofDescription, setProofDescription] = useState("");
+  const [isEditingPhase, setIsEditingPhase] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const [permissions, setPermissions] = useState({
     canEditSteps: false,
     canManageAssignments: false,
@@ -203,6 +205,11 @@ export default function CompositeSessionsPage() {
     if (session.ownerId === user.id) return true;
     return !!currentMember?.canEditProof;
   }, [session, user, currentMember]);
+  const canEditPhases = useMemo(() => {
+    if (!session || !user) return false;
+    if (session.ownerId === user.id) return true;
+    return !!currentMember?.canEditSteps;
+  }, [session, user, currentMember]);
 
   const assignmentsForSelectedStep = useMemo(
     () => session?.assignments.filter((assignment) => assignment.stepId === assignStepId) || [],
@@ -218,6 +225,10 @@ export default function CompositeSessionsPage() {
     if (!proofStepId || !session) return null;
     return session.sessionSteps.find((step) => step.stepId === proofStepId) || null;
   }, [proofStepId, session]);
+  const phaseForEdit = useMemo(
+    () => session?.composite?.steps?.find((step) => step.id === proofStepId) || null,
+    [session?.composite?.steps, proofStepId]
+  );
 
   const canManageAssignmentDelegates = useMemo(() => {
     if (!selectedAssignment || !user) return false;
@@ -259,9 +270,13 @@ export default function CompositeSessionsPage() {
   useEffect(() => {
     if (!sessionStepForProof) return;
     setProofRequired(!!sessionStepForProof.proofRequired);
-    setProofTitle(sessionStepForProof.proofTitle || "");
-    setProofDescription(sessionStepForProof.proofDescription || "");
   }, [sessionStepForProof]);
+
+  useEffect(() => {
+    if (!phaseForEdit) return;
+    setEditName(phaseForEdit.name || "");
+    setEditDescription(phaseForEdit.description || "");
+  }, [phaseForEdit]);
 
   const addMemberMutation = useMutation({
     mutationFn: (payload: { userId: string }) =>
@@ -344,8 +359,6 @@ export default function CompositeSessionsPage() {
     mutationFn: () =>
       updateSessionProofConfig(selectedSessionId!, sessionStepForProof!.id, {
         proofRequired,
-        proofTitle,
-        proofDescription,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["composite-session", selectedSessionId] });
@@ -356,6 +369,22 @@ export default function CompositeSessionsPage() {
     mutationFn: () => deleteSessionProof(selectedSessionId!, sessionStepForProof!.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["composite-session", selectedSessionId] });
+    },
+  });
+
+  const editPhaseMutation = useMutation({
+    mutationFn: () => {
+      if (!phaseForEdit) {
+        throw new Error("No phase selected");
+      }
+      return updateStep(phaseForEdit.id, {
+        name: editName,
+        description: editDescription,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["composite-session", selectedSessionId] });
+      setIsEditingPhase(false);
     },
   });
 
@@ -610,7 +639,7 @@ export default function CompositeSessionsPage() {
                                   updateMemberMutation.mutate({ memberId: member.id, data: { canEditSteps: e.target.checked } })
                                 }
                               />
-                              Edit Steps
+                              Edit Phases
                             </label>
                             <label className="flex items-center gap-2">
                               <input
@@ -733,7 +762,7 @@ export default function CompositeSessionsPage() {
                           checked={permissions.canEditSteps}
                           onChange={(e) => setPermissions((prev) => ({ ...prev, canEditSteps: e.target.checked }))}
                         />
-                        Edit Steps
+                        Edit Phases
                       </label>
                       <label className="flex items-center gap-2">
                         <input
@@ -1027,20 +1056,21 @@ export default function CompositeSessionsPage() {
                           />
                           Require proof for this phase
                         </label>
-                        <input
-                          value={proofTitle}
-                          onChange={(e) => setProofTitle(e.target.value)}
-                          placeholder="Proof title"
-                          disabled={!canManageProofs || !proofRequired}
-                          className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary disabled:opacity-40"
-                        />
-                        <textarea
-                          value={proofDescription}
-                          onChange={(e) => setProofDescription(e.target.value)}
-                          placeholder="Proof description"
-                          disabled={!canManageProofs || !proofRequired}
-                          className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[90px] resize-none disabled:opacity-40"
-                        />
+                        {canEditPhases && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setIsEditingPhase(true)}
+                            className="text-white/50 hover:text-primary"
+                          >
+                            Edit Phase
+                          </Button>
+                        )}
+                        {proofRequired && (
+                          <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                            Proof required for this phase.
+                          </p>
+                        )}
                         {sessionStepForProof.proofSubmittedAt && (
                           <div className="text-[10px] text-emerald-300 font-mono uppercase tracking-widest">
                             Proof submitted
@@ -1186,6 +1216,55 @@ export default function CompositeSessionsPage() {
           </div>
         )}
       </div>
+
+      {isEditingPhase && phaseForEdit && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-xl flex items-center justify-center z-50 p-4"
+          onClick={() => setIsEditingPhase(false)}
+        >
+          <div
+            className="bg-black/90 border border-white/10 p-6 w-full max-w-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg text-white font-display">Edit Phase</h3>
+              <Button variant="ghost" size="sm" onClick={() => setIsEditingPhase(false)}>
+                <ChevronLeft className="w-4 h-4 text-white/40 rotate-180" />
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Title</label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Description</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary min-h-[90px] resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <Button
+                onClick={() => editPhaseMutation.mutate()}
+                disabled={editPhaseMutation.isPending || !editName.trim()}
+                className="flex-1 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
+              >
+                {editPhaseMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="ghost" onClick={() => setIsEditingPhase(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -22,16 +22,30 @@ export default function WorkflowCreate() {
   const [description, setDescription] = useState("");
   const [totalSteps, setTotalSteps] = useState(5);
   const [priority, setPriority] = useState("high");
-  const [proofConfig, setProofConfig] = useState<{ proofRequired: boolean; proofTitle: string; proofDescription: string }[]>(
-    Array.from({ length: 5 }, () => ({ proofRequired: false, proofTitle: "", proofDescription: "" }))
+  const [stepConfig, setStepConfig] = useState<{ title: string; description: string }[]>(
+    Array.from({ length: 5 }, () => ({ title: "", description: "" }))
+  );
+  const [proofConfig, setProofConfig] = useState<{ proofRequired: boolean }[]>(
+    Array.from({ length: 5 }, () => ({ proofRequired: false }))
   );
 
   useEffect(() => {
+    setStepConfig((prev) => {
+      const next = [...prev];
+      if (totalSteps > next.length) {
+        for (let i = next.length; i < totalSteps; i += 1) {
+          next.push({ title: "", description: "" });
+        }
+      } else if (totalSteps < next.length) {
+        next.length = totalSteps;
+      }
+      return next;
+    });
     setProofConfig((prev) => {
       const next = [...prev];
       if (totalSteps > next.length) {
         for (let i = next.length; i < totalSteps; i += 1) {
-          next.push({ proofRequired: false, proofTitle: "", proofDescription: "" });
+          next.push({ proofRequired: false });
         }
       } else if (totalSteps < next.length) {
         next.length = totalSteps;
@@ -50,6 +64,7 @@ export default function WorkflowCreate() {
         isActive: false,
         status: "active",
         priority,
+        stepConfig,
         proofConfig,
       });
       await setActiveWorkflow(workflow.id);
@@ -64,7 +79,7 @@ export default function WorkflowCreate() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim()) {
+    if (name.trim() && stepConfig.every((step) => step.title.trim() && step.description.trim())) {
       createMutation.mutate();
     }
   };
@@ -164,16 +179,49 @@ export default function WorkflowCreate() {
             <div className="border border-white/10 bg-black/30 p-4">
               <div className="flex items-center justify-between mb-4">
                 <label className="text-xs font-mono text-white/40 uppercase tracking-widest">
-                  Proof Requirements
+                  Step Briefs + Proof
                 </label>
-                <span className="text-[10px] text-white/30 font-mono uppercase tracking-widest">Optional</span>
+                <span className="text-[10px] text-white/30 font-mono uppercase tracking-widest">Briefs required</span>
               </div>
               <div className="space-y-3">
                 {proofConfig.map((config, index) => (
                   <div key={`proof-step-${index}`} className="border border-white/10 bg-white/5 p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="mb-3">
+                      <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                        Step {index + 1}{stepConfig[index]?.title ? `: ${stepConfig[index].title}` : ""}
+                      </label>
+                    </div>
+                    <div className="space-y-2">
+                      <input
+                        value={stepConfig[index]?.title || ""}
+                        onChange={(e) =>
+                          setStepConfig((prev) =>
+                            prev.map((item, idx) =>
+                              idx === index ? { ...item, title: e.target.value } : item
+                            )
+                          )
+                        }
+                        placeholder={`Step ${index + 1} title`}
+                        required
+                        className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
+                      />
+                      <textarea
+                        value={stepConfig[index]?.description || ""}
+                        onChange={(e) =>
+                          setStepConfig((prev) =>
+                            prev.map((item, idx) =>
+                              idx === index ? { ...item, description: e.target.value } : item
+                            )
+                          )
+                        }
+                        placeholder="Step description"
+                        required
+                        className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[80px] resize-none"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-3">
                       <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
-                        Step {index + 1}
+                        Proof Requirements
                       </span>
                       <label className="flex items-center gap-2 text-[10px] font-mono text-white/50 uppercase tracking-widest">
                         <input
@@ -190,34 +238,11 @@ export default function WorkflowCreate() {
                         Require proof
                       </label>
                     </div>
-                    <div className="mt-3 space-y-2">
-                      <input
-                        value={config.proofTitle}
-                        onChange={(e) =>
-                          setProofConfig((prev) =>
-                            prev.map((item, idx) =>
-                              idx === index ? { ...item, proofTitle: e.target.value } : item
-                            )
-                          )
-                        }
-                        placeholder="Proof title"
-                        disabled={!config.proofRequired}
-                        className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary disabled:opacity-40"
-                      />
-                      <textarea
-                        value={config.proofDescription}
-                        onChange={(e) =>
-                          setProofConfig((prev) =>
-                            prev.map((item, idx) =>
-                              idx === index ? { ...item, proofDescription: e.target.value } : item
-                            )
-                          )
-                        }
-                        placeholder="Proof description"
-                        disabled={!config.proofRequired}
-                        className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[80px] resize-none disabled:opacity-40"
-                      />
-                    </div>
+                    {config.proofRequired && (
+                      <p className="mt-3 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                        Proof required for this step.
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -254,7 +279,7 @@ export default function WorkflowCreate() {
             <div className="pt-6 border-t border-white/5">
               <Button
                 type="submit"
-                disabled={!name.trim() || createMutation.isPending}
+                disabled={!name.trim() || stepConfig.some((step) => !step.title.trim() || !step.description.trim()) || createMutation.isPending}
                 className="w-full bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider py-6 text-lg"
                 data-testid="button-create-workflow"
               >

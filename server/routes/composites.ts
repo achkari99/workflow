@@ -187,8 +187,6 @@ export function registerCompositeRoutes(app: Express) {
                     stepId: step.id,
                     isCompleted: false,
                     proofRequired: step.proofRequired || false,
-                    proofTitle: step.proofTitle,
-                    proofDescription: step.proofDescription,
                     proofContent: step.proofContent,
                     proofFilePath: step.proofFilePath,
                     proofFileName: step.proofFileName,
@@ -713,7 +711,7 @@ export function registerCompositeRoutes(app: Express) {
                 return res.status(404).json({ error: "Session step not found" });
             }
             const updatePayload: Record<string, any> = {};
-            for (const key of ["name", "description", "objective", "instructions"]) {
+            for (const key of ["name", "description"]) {
                 if (req.body[key] !== undefined) {
                     updatePayload[key] = req.body[key];
                 }
@@ -753,7 +751,7 @@ export function registerCompositeRoutes(app: Express) {
                 return res.status(404).json({ error: "Session step not found" });
             }
             const updatePayload: Record<string, any> = {};
-            for (const key of ["proofRequired", "proofTitle", "proofDescription"]) {
+            for (const key of ["proofRequired"]) {
                 if (req.body[key] !== undefined) {
                     updatePayload[key] = req.body[key];
                 }

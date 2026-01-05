@@ -23,14 +23,14 @@ export function registerRootRoutes(app: Express) {
             });
 
             const stepData1 = [
-                { name: "Discovery & Requirements", description: "Gather stakeholder requirements and define scope", objective: "Document all requirements and success criteria", instructions: "1. Meet with stakeholders\n2. Document requirements\n3. Get sign-off", status: "completed" },
-                { name: "Architecture Design", description: "Design system architecture and data models", objective: "Create technical architecture documentation", instructions: "1. Design database schema\n2. Define API contracts\n3. Review with team", status: "completed" },
-                { name: "Core Development", description: "Build core platform features", objective: "Implement MVP features", instructions: "1. Set up development environment\n2. Implement core features\n3. Write unit tests", status: "active" },
-                { name: "Integration Testing", description: "Test all integrations and data flows", objective: "Ensure all systems work together", instructions: "1. Write integration tests\n2. Test API endpoints\n3. Validate data flows", status: "locked", requiresApproval: true },
-                { name: "Security Audit", description: "Conduct security review and penetration testing", objective: "Identify and fix security vulnerabilities", instructions: "1. Run security scans\n2. Fix critical issues\n3. Document findings", status: "locked" },
-                { name: "Performance Optimization", description: "Optimize for speed and scalability", objective: "Meet performance benchmarks", instructions: "1. Profile application\n2. Optimize bottlenecks\n3. Load testing", status: "locked" },
-                { name: "Staging Deployment", description: "Deploy to staging environment", objective: "Successful staging deployment", instructions: "1. Configure staging\n2. Deploy application\n3. Smoke testing", status: "locked", requiresApproval: true },
-                { name: "Production Launch", description: "Go live with production deployment", objective: "Successful production launch", instructions: "1. Final review\n2. Deploy to production\n3. Monitor metrics", status: "locked", requiresApproval: true },
+                { name: "Discovery & Requirements", description: "Gather stakeholder requirements and define scope", status: "completed" },
+                { name: "Architecture Design", description: "Design system architecture and data models", status: "completed" },
+                { name: "Core Development", description: "Build core platform features", status: "active" },
+                { name: "Integration Testing", description: "Test all integrations and data flows", status: "locked", requiresApproval: true },
+                { name: "Security Audit", description: "Conduct security review and penetration testing", status: "locked" },
+                { name: "Performance Optimization", description: "Optimize for speed and scalability", status: "locked" },
+                { name: "Staging Deployment", description: "Deploy to staging environment", status: "locked", requiresApproval: true },
+                { name: "Production Launch", description: "Go live with production deployment", status: "locked", requiresApproval: true },
             ];
 
             for (let i = 0; i < stepData1.length; i++) {

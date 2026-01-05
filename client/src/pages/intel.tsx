@@ -272,6 +272,7 @@ export default function IntelPage() {
   });
 
   const compositeId = stepDetails?.compositeId ?? null;
+  const isCompositeView = !!compositeId;
 
   const { data: composite, isLoading: compositeLoading } = useQuery({
     queryKey: ["composite", compositeId],
@@ -349,7 +350,7 @@ export default function IntelPage() {
         <div className="grid lg:grid-cols-4 gap-8">
           <div className="lg:col-span-1">
             <h2 className="text-xs font-mono text-white/40 uppercase tracking-widest mb-4">
-              Phases
+              {isCompositeView ? "Phases" : "Steps"}
             </h2>
             <div className="space-y-2">
               {stepList.map((step) => (
@@ -363,7 +364,7 @@ export default function IntelPage() {
                   data-testid={`step-select-${step.id}`}
                 >
                   <span className="text-xs font-mono text-white/30 block mb-1">
-                    Phase {step.stepNumber}
+                    {isCompositeView ? "Phase" : "Step"} {step.stepNumber}
                   </span>
                   <span className="text-sm">{step.name}</span>
                 </button>
@@ -375,7 +376,7 @@ export default function IntelPage() {
             {!selectedStepId ? (
               <div className="text-center py-20">
                 <BookOpen className="w-16 h-16 text-white/10 mx-auto mb-4" />
-                <p className="text-white/40">Select a step to view intel documents</p>
+                <p className="text-white/40">Select a {isCompositeView ? "phase" : "step"} to view intel documents</p>
               </div>
             ) : intelLoading ? (
               <div className="flex items-center justify-center py-20">
@@ -384,7 +385,7 @@ export default function IntelPage() {
             ) : intelDocs?.length === 0 ? (
               <div className="text-center py-20">
                 <FileText className="w-16 h-16 text-white/10 mx-auto mb-4" />
-                <p className="text-white/40 mb-4">No intel documents for this step</p>
+                <p className="text-white/40 mb-4">No intel documents for this {isCompositeView ? "phase" : "step"}</p>
                 <Button
                   onClick={() => setShowAddModal(true)}
                   className="bg-primary hover:bg-primary/90 text-black"

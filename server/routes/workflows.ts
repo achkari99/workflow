@@ -55,18 +55,20 @@ export function registerWorkflowRoutes(app: Express) {
             const workflow = await storage.createWorkflow(validation.data);
 
             const proofConfig = Array.isArray(req.body.proofConfig) ? req.body.proofConfig : [];
+            const stepConfig = Array.isArray(req.body.stepConfig) ? req.body.stepConfig : [];
             for (let i = 1; i <= workflow.totalSteps; i++) {
                 const proof = proofConfig[i - 1] || {};
                 const proofRequired = !!proof.proofRequired;
+                const stepMeta = stepConfig[i - 1] || {};
+                const rawTitle = typeof stepMeta.title === "string" ? stepMeta.title.trim() : "";
+                const rawDescription = typeof stepMeta.description === "string" ? stepMeta.description.trim() : "";
                 await storage.createStep({
                     workflowId: workflow.id,
                     stepNumber: i,
-                    name: `Step ${i}`,
-                    description: `Complete phase ${i}`,
+                    name: rawTitle || `Step ${i}`,
+                    description: rawDescription || `Complete step ${i}`,
                     status: i === 1 ? "active" : "locked",
                     proofRequired,
-                    proofTitle: proofRequired ? proof.proofTitle || null : null,
-                    proofDescription: proofRequired ? proof.proofDescription || null : null,
                 });
             }
 

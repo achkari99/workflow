@@ -40,6 +40,9 @@ export default function MissionControl() {
     }
   };
 
+  const activeStep = activeWorkflow?.steps?.find(
+    (step) => step.stepNumber === activeWorkflow.currentStep
+  ) || null;
   const secondaryWorkflows = allWorkflows?.filter(w => !w.isActive) || [];
 
   if (isLoading) {
@@ -215,7 +218,7 @@ export default function MissionControl() {
             {activeWorkflow ? (
               <MissionCard
                 questName={activeWorkflow.name}
-                stepName={`Step ${activeWorkflow.currentStep} — ${activeWorkflow.description || "In Progress"}`}
+                stepName={`Step ${activeWorkflow.currentStep}: ${activeStep?.name || "In Progress"}`}
                 progress={(activeWorkflow.currentStep / activeWorkflow.totalSteps) * 100}
                 totalSteps={activeWorkflow.totalSteps}
                 currentStep={activeWorkflow.currentStep}

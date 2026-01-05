@@ -33,7 +33,8 @@ export async function advanceWorkflow(id: number, stepId?: number): Promise<Work
 
 export async function createWorkflow(
   workflow: InsertWorkflow & {
-    proofConfig?: { proofRequired?: boolean; proofTitle?: string; proofDescription?: string }[];
+    proofConfig?: { proofRequired?: boolean }[];
+    stepConfig?: { title?: string; description?: string }[];
   }
 ): Promise<Workflow> {
   const res = await fetch("/api/workflows", {
@@ -389,7 +390,7 @@ export async function deleteCompositeSessionIntel(sessionId: number, docId: numb
   if (!res.ok) throw new Error("Failed to delete session intel");
 }
 
-export async function updateStepProofConfig(stepId: number, payload: { proofRequired?: boolean; proofTitle?: string | null; proofDescription?: string | null }) {
+export async function updateStepProofConfig(stepId: number, payload: { proofRequired?: boolean }) {
   const res = await fetch(`/api/steps/${stepId}/proof-config`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -428,7 +429,7 @@ export async function deleteStepProof(stepId: number): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete proof");
 }
 
-export async function updateSessionProofConfig(sessionId: number, sessionStepId: number, payload: { proofRequired?: boolean; proofTitle?: string | null; proofDescription?: string | null }) {
+export async function updateSessionProofConfig(sessionId: number, sessionStepId: number, payload: { proofRequired?: boolean }) {
   const res = await fetch(`/api/composite-sessions/${sessionId}/steps/${sessionStepId}/proof-config`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

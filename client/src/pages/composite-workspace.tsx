@@ -111,7 +111,7 @@ function MasterJourneyPath({
                                             </div>
                                         </div>
                                         <p className={`text-sm font-medium truncate ${isActive ? "text-white" : "text-white/60 group-hover:text-white/90"}`}>
-                                            Phase {index + 1}
+                                            Phase {index + 1}: {step.name}
                                         </p>
                                     </div>
                                 </motion.button>
@@ -136,6 +136,9 @@ export default function CompositeWorkspace() {
     const [proofContent, setProofContent] = useState("");
     const [proofFile, setProofFile] = useState<File | null>(null);
     const [isEditingProof, setIsEditingProof] = useState(false);
+    const [isEditingPhase, setIsEditingPhase] = useState(false);
+    const [editName, setEditName] = useState("");
+    const [editDescription, setEditDescription] = useState("");
     const fileInputId = useId();
     const proofFileInputId = useId();
     const queryClient = useQueryClient();
@@ -155,8 +158,6 @@ export default function CompositeWorkspace() {
     const isProofRequired = !!stepDetails?.proofRequired;
     const isProofSubmitted = !!stepDetails?.proofSubmittedAt || !!stepDetails?.proofContent || !!stepDetails?.proofFilePath;
     const isProofSatisfied = !isProofRequired || isProofSubmitted;
-    const proofTitle = stepDetails?.proofTitle || "Proof Submission";
-    const proofDescription = stepDetails?.proofDescription || "Provide evidence for this phase.";
     const proofFileUrl = (stepDetails as any)?.proofFileUrl as string | null | undefined;
 
     // Auto-select first incomplete step or first step
@@ -171,6 +172,8 @@ export default function CompositeWorkspace() {
         if (!stepDetails) return;
         setProofContent(stepDetails.proofContent || "");
         setProofFile(null);
+        setEditName(stepDetails.name || "");
+        setEditDescription(stepDetails.description || "");
         if (!stepDetails.proofRequired) {
             setIsEditingProof(false);
             return;
@@ -246,6 +249,23 @@ export default function CompositeWorkspace() {
         },
     });
 
+    const editPhaseMutation = useMutation({
+        mutationFn: () => {
+            if (!selectedStepId) {
+                throw new Error("No phase selected");
+            }
+            return updateStep(selectedStepId, {
+                name: editName,
+                description: editDescription,
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["step", selectedStepId] });
+            queryClient.invalidateQueries({ queryKey: ["composite", compositeId] });
+            setIsEditingPhase(false);
+        },
+    });
+
     if (compositeLoading) {
         return (
             <div className="h-screen bg-background flex flex-col items-center justify-center space-y-4">
@@ -270,6 +290,7 @@ export default function CompositeWorkspace() {
     const selectedStepOrder = selectedStepIndex !== -1 ? selectedStepIndex + 1 : null;
 
     return (
+        <>
         <div className="h-screen bg-[#050505] text-foreground flex flex-col overflow-hidden">
             {/* Master Ticker / Status Bar */}
             <header className="h-16 border-b border-white/5 bg-black flex items-center px-6 shrink-0 relative overflow-hidden">
@@ -366,31 +387,40 @@ export default function CompositeWorkspace() {
                                             <div className="text-white/20 text-xs font-mono">/</div>
                                             <div className="flex items-center gap-2 text-white/40 text-xs font-mono bg-white/5 px-2 py-0.5 border border-white/5">
                                                 <WorkflowIcon className="w-3 h-3" />
-                                                Source: {composite.steps.find(s => s.id === stepDetails.id)?.workflowName}
+                                                Source: STEP {stepDetails.stepNumber} {composite.steps.find(s => s.id === stepDetails.id)?.workflowName}
                                             </div>
                                         </div>
-                                        <div className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest border ${statusConfig[stepDetails.status].bg} ${statusConfig[stepDetails.status].color} flex items-center gap-2`}>
-                                            <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-                                            {statusConfig[stepDetails.status].label}
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setIsEditingPhase(true)}
+                                                className="text-white/50 hover:text-primary"
+                                            >
+                                                Edit Phase
+                                            </Button>
+                                            <div className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest border ${statusConfig[stepDetails.status].bg} ${statusConfig[stepDetails.status].color} flex items-center gap-2`}>
+                                                <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                                                {statusConfig[stepDetails.status].label}
+                                            </div>
                                         </div>
                                     </div>
                                     <h1 className="text-3xl font-display font-bold text-white tracking-tight mt-4">
-                                        Phase {selectedStepOrder ?? stepDetails.stepNumber}
+                                        PHASE {selectedStepOrder ?? stepDetails.stepNumber}: {stepDetails.name}
                                     </h1>
-                                    <p className="text-white/40 text-sm mt-2">{stepDetails.name}</p>
                                 </header>
 
                                 {/* Submission Area */}
                                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                                     <div className="border border-white/10 bg-white/5 p-5">
                                         <div className="flex items-center justify-between">
-                                            <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Proof Brief</p>
+                                            <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Phase Brief</p>
                                             <span className={`text-[10px] font-mono uppercase tracking-widest ${isProofRequired ? "text-primary" : "text-white/30"}`}>
-                                                {isProofRequired ? "Required" : "Optional"}
+                                                {isProofRequired ? "Proof required" : "Proof optional"}
                                             </span>
                                         </div>
-                                        <h3 className="text-lg text-white mt-3">{proofTitle}</h3>
-                                        <p className="text-sm text-white/50 mt-2">{proofDescription}</p>
+                                        <h3 className="text-lg text-white mt-3">{stepDetails.name}</h3>
+                                        <p className="text-sm text-white/50 mt-2">{stepDetails.description || "Add a phase description."}</p>
                                         {!isProofRequired && (
                                             <p className="text-[10px] text-white/30 mt-3 font-mono uppercase tracking-widest">
                                                 Proof not required for this phase.
@@ -399,7 +429,9 @@ export default function CompositeWorkspace() {
                                     </div>
 
                                     <div className="border border-white/10 bg-white/5 p-5 space-y-3">
-                                        <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Submission</p>
+                                        <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                                            Submission{isProofRequired ? ": Proofs are required for this phase" : ""}
+                                        </p>
                                         <textarea
                                             value={proofContent}
                                             onChange={(e) => setProofContent(e.target.value)}
@@ -690,7 +722,7 @@ export default function CompositeWorkspace() {
                                         ) : (
                                             <Zap className="w-4 h-4 mr-2" />
                                         )}
-                                        Begin Step
+                                        Begin Phase
                                     </Button>
                                 )}
 
@@ -755,5 +787,55 @@ export default function CompositeWorkspace() {
                 </motion.div>
             </div>
         </div>
+
+        {isEditingPhase && stepDetails && (
+            <div
+                className="fixed inset-0 bg-black/80 backdrop-blur-xl flex items-center justify-center z-50 p-4"
+                onClick={() => setIsEditingPhase(false)}
+            >
+                <div
+                    className="bg-black/90 border border-white/10 p-6 w-full max-w-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg text-white font-display">Edit Phase</h3>
+                        <Button variant="ghost" size="sm" onClick={() => setIsEditingPhase(false)}>
+                            <ChevronLeft className="w-4 h-4 text-white/40 rotate-180" />
+                        </Button>
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Title</label>
+                            <input
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Description</label>
+                            <textarea
+                                value={editDescription}
+                                onChange={(e) => setEditDescription(e.target.value)}
+                                className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary min-h-[90px] resize-none"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex gap-2 mt-5">
+                        <Button
+                            onClick={() => editPhaseMutation.mutate()}
+                            disabled={editPhaseMutation.isPending || !editName.trim()}
+                            className="flex-1 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
+                        >
+                            {editPhaseMutation.isPending ? "Saving..." : "Save Changes"}
+                        </Button>
+                        <Button variant="ghost" onClick={() => setIsEditingPhase(false)}>
+                            Cancel
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 }

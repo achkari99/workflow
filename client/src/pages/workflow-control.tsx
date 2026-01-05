@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getWorkflow, updateStepProofConfig, deleteStepProof } from "@/lib/api";
+import { getWorkflow, updateStep, updateStepProofConfig, deleteStepProof } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, Shield, FileText, CheckCircle2 } from "lucide-react";
 import type { Step, WorkflowWithSteps } from "@shared/schema";
@@ -21,8 +21,9 @@ export default function WorkflowControl() {
   const queryClient = useQueryClient();
   const [selectedStepId, setSelectedStepId] = useState<number | null>(null);
   const [proofRequired, setProofRequired] = useState(false);
-  const [proofTitle, setProofTitle] = useState("");
-  const [proofDescription, setProofDescription] = useState("");
+  const [isEditingStep, setIsEditingStep] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
 
   const { data: workflow, isLoading } = useQuery<WorkflowWithSteps>({
     queryKey: ["workflow", workflowId],
@@ -44,16 +45,14 @@ export default function WorkflowControl() {
   useEffect(() => {
     if (!selectedStep) return;
     setProofRequired(!!selectedStep.proofRequired);
-    setProofTitle(selectedStep.proofTitle || "");
-    setProofDescription(selectedStep.proofDescription || "");
+    setEditName(selectedStep.name || "");
+    setEditDescription(selectedStep.description || "");
   }, [selectedStep]);
 
   const updateProofMutation = useMutation({
     mutationFn: () =>
       updateStepProofConfig(selectedStep!.id, {
         proofRequired,
-        proofTitle,
-        proofDescription,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
@@ -64,6 +63,18 @@ export default function WorkflowControl() {
     mutationFn: () => deleteStepProof(selectedStep!.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
+    },
+  });
+
+  const editStepMutation = useMutation({
+    mutationFn: () =>
+      updateStep(selectedStep!.id, {
+        name: editName,
+        description: editDescription,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
+      setIsEditingStep(false);
     },
   });
 
@@ -83,16 +94,16 @@ export default function WorkflowControl() {
           <Shield className="w-4 h-4" />
           Mission Control
         </div>
-        <div className="text-white/30 text-xs">{workflow?.steps?.length || 0} phases</div>
+        <div className="text-white/30 text-xs">{workflow?.steps?.length || 0} steps</div>
       </header>
 
       <div className="grid grid-cols-[260px_1fr] min-h-[calc(100vh-56px)]">
         <aside className="border-r border-white/5 bg-black/60 p-4">
-          <h2 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-4">Phases</h2>
+          <h2 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-4">Steps</h2>
           {isLoading ? (
             <div className="flex justify-center py-10 text-white/40 text-xs">Loading...</div>
           ) : !workflow?.steps?.length ? (
-            <div className="text-xs text-white/40">No phases found.</div>
+            <div className="text-xs text-white/40">No steps found.</div>
           ) : (
             <div className="space-y-3">
               {workflow.steps.map((step, index) => {
@@ -107,7 +118,7 @@ export default function WorkflowControl() {
                         : "border-white/10 text-white/60 hover:border-white/30"
                     }`}
                   >
-                    <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Phase {index + 1}</p>
+                    <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Step {index + 1}</p>
                     <p className="text-sm text-white truncate">{step.name}</p>
                     <p className="text-[10px] text-white/40 mt-1">{statusLabel[step.status] || "Locked"}</p>
                   </button>
@@ -119,13 +130,25 @@ export default function WorkflowControl() {
 
         <main className="p-8">
           {!selectedStep ? (
-            <div className="text-center text-white/40">Select a phase to manage.</div>
+            <div className="text-center text-white/40">Select a step to manage.</div>
           ) : (
             <div className="max-w-3xl space-y-6">
-              <div>
-                <div className="text-xs font-mono text-white/40 uppercase tracking-widest">Selected Phase</div>
-                <h1 className="text-2xl font-display text-white mt-2">{selectedStep.name}</h1>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                <div className="text-xs font-mono text-white/40 uppercase tracking-widest">Selected Step</div>
+                <h1 className="text-2xl font-display text-white mt-2">
+                  STEP {selectedStep.stepNumber}: {selectedStep.name}
+                </h1>
                 <p className="text-sm text-white/40 mt-1">{selectedStep.description}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditingStep(true)}
+                  className="text-white/50 hover:text-primary"
+                >
+                  Edit Step
+                </Button>
               </div>
 
               <div className="border border-white/10 bg-black/40 p-6">
@@ -143,22 +166,13 @@ export default function WorkflowControl() {
                     checked={proofRequired}
                     onChange={(e) => setProofRequired(e.target.checked)}
                   />
-                  Require proof for this phase
+                  Require proof for this step
                 </label>
-                <input
-                  value={proofTitle}
-                  onChange={(e) => setProofTitle(e.target.value)}
-                  placeholder="Proof title"
-                  disabled={!proofRequired}
-                  className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary disabled:opacity-40"
-                />
-                <textarea
-                  value={proofDescription}
-                  onChange={(e) => setProofDescription(e.target.value)}
-                  placeholder="Proof description"
-                  disabled={!proofRequired}
-                  className="mt-3 w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[100px] resize-none disabled:opacity-40"
-                />
+                {proofRequired && (
+                  <p className="mt-3 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                    Proof required for this step.
+                  </p>
+                )}
                 <div className="flex items-center gap-2 mt-4">
                   <Button
                     size="sm"
@@ -194,6 +208,55 @@ export default function WorkflowControl() {
           )}
         </main>
       </div>
+
+      {isEditingStep && selectedStep && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-xl flex items-center justify-center z-50 p-4"
+          onClick={() => setIsEditingStep(false)}
+        >
+          <div
+            className="bg-black/90 border border-white/10 p-6 w-full max-w-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg text-white font-display">Edit Step</h3>
+              <Button variant="ghost" size="sm" onClick={() => setIsEditingStep(false)}>
+                <ChevronLeft className="w-4 h-4 text-white/40 rotate-180" />
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Title</label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Description</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary min-h-[90px] resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <Button
+                onClick={() => editStepMutation.mutate()}
+                disabled={editStepMutation.isPending || !editName.trim()}
+                className="flex-1 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
+              >
+                {editStepMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="ghost" onClick={() => setIsEditingStep(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

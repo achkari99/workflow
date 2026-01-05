@@ -1,7 +1,7 @@
 import { useParams, useLocation } from "wouter";
 import { useEffect, useState, useId } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getWorkflow, getStep, startStep, completeStep, advanceWorkflow, requestApproval, addIntelDoc, uploadIntelDoc, submitStepProof, uploadStepProof } from "@/lib/api";
+import { getWorkflow, getStep, startStep, completeStep, advanceWorkflow, requestApproval, addIntelDoc, uploadIntelDoc, submitStepProof, uploadStepProof, updateStep } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -101,6 +101,55 @@ function JourneyPath({
           </div>
         </div>
       </div>
+
+      {isEditingStep && stepDetails && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-xl flex items-center justify-center z-50 p-4"
+          onClick={() => setIsEditingStep(false)}
+        >
+          <div
+            className="bg-black/90 border border-white/10 p-6 w-full max-w-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg text-white font-display">Edit Step</h3>
+              <Button variant="ghost" size="sm" onClick={() => setIsEditingStep(false)}>
+                <ChevronLeft className="w-4 h-4 text-white/40 rotate-180" />
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Title</label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Description</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary min-h-[90px] resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <Button
+                onClick={() => editStepMutation.mutate()}
+                disabled={editStepMutation.isPending || !editName.trim()}
+                className="flex-1 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
+              >
+                {editStepMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="ghost" onClick={() => setIsEditingStep(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -108,8 +157,6 @@ function JourneyPath({
 function ExecutionCenter({
   step,
   isLoading,
-  proofTitle,
-  proofDescription,
   proofContent,
   onProofContentChange,
   proofFile,
@@ -120,6 +167,8 @@ function ExecutionCenter({
   isEditingProof,
   onToggleEditProof,
   onSubmitProof,
+  onEditStep,
+  canEditStep,
   canEditProof,
   isSubmittingProof,
   proofFileInputId,
@@ -132,8 +181,6 @@ function ExecutionCenter({
 }: {
   step: StepWithDetails | null;
   isLoading: boolean;
-  proofTitle: string;
-  proofDescription: string;
   proofContent: string;
   onProofContentChange: (value: string) => void;
   proofFile: File | null;
@@ -144,6 +191,8 @@ function ExecutionCenter({
   isEditingProof: boolean;
   onToggleEditProof: () => void;
   onSubmitProof: () => void;
+  onEditStep: () => void;
+  canEditStep: boolean;
   canEditProof: boolean;
   isSubmittingProof: boolean;
   proofFileInputId: string;
@@ -185,14 +234,27 @@ function ExecutionCenter({
               <Icon className={`w-5 h-5 ${config.color}`} />
             </div>
             <div>
-              <p className="text-xs font-mono text-white/40 uppercase tracking-widest">Step {step.stepNumber}</p>
-              <h1 className="font-display text-2xl text-white tracking-wide">{step.name}</h1>
+              <h1 className="font-display text-2xl text-white tracking-wide">
+                STEP {step.stepNumber}: {step.name}
+              </h1>
             </div>
           </div>
 
-          <div className={`px-3 py-1.5 ${config.bg} ${config.color} text-xs font-mono uppercase tracking-wider flex items-center gap-2`}>
-            <Icon className="w-3 h-3" />
-            {config.label}
+          <div className="flex items-center gap-2">
+            {canEditStep && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onEditStep}
+                className="text-white/50 hover:text-primary"
+              >
+                Edit Step
+              </Button>
+            )}
+            <div className={`px-3 py-1.5 ${config.bg} ${config.color} text-xs font-mono uppercase tracking-wider flex items-center gap-2`}>
+              <Icon className="w-3 h-3" />
+              {config.label}
+            </div>
           </div>
         </div>
       </div>
@@ -200,22 +262,24 @@ function ExecutionCenter({
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         <div className="border border-white/10 bg-white/5 p-5">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Proof Brief</p>
+            <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Step Brief</p>
             <span className={`text-[10px] font-mono uppercase tracking-widest ${isProofRequired ? "text-primary" : "text-white/30"}`}>
-              {isProofRequired ? "Required" : "Optional"}
+              {isProofRequired ? "Proof required" : "Proof optional"}
             </span>
           </div>
-          <h3 className="text-lg text-white mt-3">{proofTitle}</h3>
-          <p className="text-sm text-white/50 mt-2">{proofDescription}</p>
+          <h3 className="text-lg text-white mt-3">{step.name}</h3>
+          <p className="text-sm text-white/50 mt-2">{step.description || "Add a step description."}</p>
           {!isProofRequired && (
             <p className="text-[10px] text-white/30 mt-3 font-mono uppercase tracking-widest">
-              Proof not required for this phase.
+              Proof not required for this step.
             </p>
           )}
         </div>
 
         <div className="border border-white/10 bg-white/5 p-5 space-y-3">
-          <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Submission</p>
+          <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
+            Submission{isProofRequired ? ": Proofs are required for this step" : ""}
+          </p>
           <textarea
             value={proofContent}
             onChange={(e) => onProofContentChange(e.target.value)}
@@ -306,7 +370,7 @@ function ExecutionCenter({
               ) : (
                 <CheckCircle2 className="w-4 h-4 mr-2" />
               )}
-              Complete Phase
+              Complete Step
             </Button>
           )}
 
@@ -335,14 +399,14 @@ function ExecutionCenter({
           {step.status === "completed" && (
             <div className="space-y-3">
               <div className="h-11 flex items-center justify-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono text-xs uppercase tracking-widest">
-                <CheckCircle2 className="w-4 h-4" /> Phase Completed
+                <CheckCircle2 className="w-4 h-4" /> Step Completed
               </div>
               {onNextStep && (
                 <Button
                   onClick={onNextStep}
                   className="w-full h-11 bg-white/5 hover:bg-white/10 text-white border border-white/10 font-mono text-[10px] uppercase tracking-[0.2em]"
                 >
-                  Advance to Next Phase
+                  Advance to Next Step
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               )}
@@ -420,7 +484,9 @@ function IntelPanel({
       <div className="p-6 border-b border-white/5 flex items-center justify-between">
         <div>
           <h2 className="font-display text-lg text-white/90 tracking-wide">Intel</h2>
-          <p className="text-xs text-white/40 mt-1 font-mono uppercase tracking-widest">Step {step.stepNumber} Resources</p>
+          <p className="text-xs text-white/40 mt-1 font-mono uppercase tracking-widest">
+            Step {step.stepNumber}: {step.name}
+          </p>
         </div>
         <div className="flex gap-1">
           <Button
@@ -640,6 +706,9 @@ export default function WorkflowWorkspace() {
   const [proofContent, setProofContent] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [isEditingProof, setIsEditingProof] = useState(false);
+  const [isEditingStep, setIsEditingStep] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const proofFileInputId = useId();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -659,8 +728,6 @@ export default function WorkflowWorkspace() {
   const isProofRequired = !!stepDetails?.proofRequired;
   const isProofSubmitted = !!stepDetails?.proofSubmittedAt || !!stepDetails?.proofContent || !!stepDetails?.proofFilePath;
   const isProofSatisfied = !isProofRequired || isProofSubmitted;
-  const proofTitle = stepDetails?.proofTitle || "Proof Submission";
-  const proofDescription = stepDetails?.proofDescription || "Provide evidence for this phase.";
   const proofFileUrl = (stepDetails as any)?.proofFileUrl as string | null | undefined;
 
   // Auto-select current active step or first step
@@ -679,6 +746,8 @@ export default function WorkflowWorkspace() {
     if (!stepDetails) return;
     setProofContent(stepDetails.proofContent || "");
     setProofFile(null);
+    setEditName(stepDetails.name || "");
+    setEditDescription(stepDetails.description || "");
     if (!stepDetails.proofRequired) {
       setIsEditingProof(false);
       return;
@@ -691,6 +760,8 @@ export default function WorkflowWorkspace() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["step", selectedStepId] });
       queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
+      queryClient.invalidateQueries({ queryKey: ["activeWorkflow"] });
+      queryClient.invalidateQueries({ queryKey: ["workflows"] });
     },
   });
 
@@ -703,6 +774,8 @@ export default function WorkflowWorkspace() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["step", selectedStepId] });
       queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
+      queryClient.invalidateQueries({ queryKey: ["activeWorkflow"] });
+      queryClient.invalidateQueries({ queryKey: ["workflows"] });
     },
   });
 
@@ -711,6 +784,8 @@ export default function WorkflowWorkspace() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["step", selectedStepId] });
       queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
+      queryClient.invalidateQueries({ queryKey: ["activeWorkflow"] });
+      queryClient.invalidateQueries({ queryKey: ["workflows"] });
     },
   });
 
@@ -726,8 +801,28 @@ export default function WorkflowWorkspace() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["step", selectedStepId] });
+      queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
+      queryClient.invalidateQueries({ queryKey: ["activeWorkflow"] });
+      queryClient.invalidateQueries({ queryKey: ["workflows"] });
       setProofFile(null);
       setIsEditingProof(false);
+    },
+  });
+
+  const editStepMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedStepId) {
+        throw new Error("No step selected");
+      }
+      return updateStep(selectedStepId, {
+        name: editName,
+        description: editDescription,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["step", selectedStepId] });
+      queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
+      setIsEditingStep(false);
     },
   });
 
@@ -827,8 +922,6 @@ export default function WorkflowWorkspace() {
           <ExecutionCenter
             step={stepDetails || null}
             isLoading={stepLoading}
-            proofTitle={proofTitle}
-            proofDescription={proofDescription}
             proofContent={proofContent}
             onProofContentChange={setProofContent}
             proofFile={proofFile}
@@ -839,6 +932,8 @@ export default function WorkflowWorkspace() {
             isEditingProof={isEditingProof}
             onToggleEditProof={() => setIsEditingProof(true)}
             onSubmitProof={() => submitProofMutation.mutate()}
+            onEditStep={() => setIsEditingStep(true)}
+            canEditStep={!!user}
             canEditProof={!!user}
             isSubmittingProof={submitProofMutation.isPending}
             proofFileInputId={proofFileInputId}

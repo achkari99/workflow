@@ -150,7 +150,7 @@ export function registerIntelRoutes(app: Express) {
                 return res.status(403).json({ error: "You don't have permission to edit proofs" });
             }
             const updatePayload: Record<string, any> = {};
-            for (const key of ["proofRequired", "proofTitle", "proofDescription"]) {
+            for (const key of ["proofRequired"]) {
                 if (req.body[key] !== undefined) {
                     updatePayload[key] = req.body[key];
                 }
