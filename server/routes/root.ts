@@ -2,6 +2,10 @@ import type { Express } from "express";
 import { storage } from "../storage";
 
 export function registerRootRoutes(app: Express) {
+    app.get("/ping", (_req, res) => {
+        res.json({ status: "ok" });
+    });
+
     app.post("/api/seed", async (req, res) => {
         if (process.env.NODE_ENV === "production") {
             return res.status(403).json({ error: "Seed route is disabled in production" });
