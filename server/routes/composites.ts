@@ -45,18 +45,6 @@ async function attachProofUrl<T extends { proofFilePath?: string | null }>(item:
 }
 
 export function registerCompositeRoutes(app: Express) {
-    app.get("/api/users/search", isAuthenticated, async (req, res) => {
-        try {
-            const query = req.query.q as string;
-            if (!query || query.length < 2) {
-                return res.json([]);
-            }
-            const users = await storage.searchUsers(query);
-            res.json(users);
-        } catch (error) {
-            res.status(500).json({ error: "Failed to search users" });
-        }
-    });
 
     app.get("/api/composites", isAuthenticated, async (req, res) => {
         try {

@@ -7,6 +7,7 @@ import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { authStorage } from "./authStorage";
 import { type User as SelectUser } from "@shared/models/auth";
+import { storage } from "./storage";
 
 declare global {
   namespace Express {
@@ -150,6 +151,19 @@ export async function setupAuth(app: Express) {
       return res.status(401).json({ message: "Not authenticated" });
     }
     res.json(req.user);
+  });
+
+  app.get("/api/users/search", isAuthenticated, async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.length < 2) {
+        return res.json([]);
+      }
+      const users = await storage.searchUsers(query);
+      res.json(users);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to search users" });
+    }
   });
 
   app.get("/api/users/:id", async (req, res) => {
