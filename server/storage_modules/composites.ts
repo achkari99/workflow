@@ -40,16 +40,22 @@ import {
     type InsertCompositeWorkflowSessionMessageRead,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, desc, asc, and, ilike, inArray } from "drizzle-orm";
+import { eq, desc, asc, and, ilike, inArray, or } from "drizzle-orm";
 
 export class CompositeStorage {
-    async searchUsers(query: string): Promise<{ id: string; email: string | null; firstName: string | null; lastName: string | null }[]> {
+    async searchUsers(query: string): Promise<{ id: string; email: string | null; username: string | null; firstName: string | null; lastName: string | null }[]> {
         return await db.select({
             id: users.id,
             email: users.email,
+            username: users.username,
             firstName: users.firstName,
             lastName: users.lastName,
-        }).from(users).where(ilike(users.email, `%${query}%`)).limit(10);
+        }).from(users).where(
+            or(
+                ilike(users.email, `%${query}%`),
+                ilike(users.username, `%${query}%`)
+            )
+        ).limit(10);
     }
 
     async getCompositeWorkflows(userId?: string): Promise<CompositeWorkflowWithItems[]> {

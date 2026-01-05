@@ -82,7 +82,7 @@ export interface IStorage {
   getSharedWorkflows(userId: string): Promise<WorkflowWithSteps[]>;
 
   // Users
-  searchUsers(query: string): Promise<{ id: string; email: string | null; firstName: string | null; lastName: string | null }[]>;
+  searchUsers(query: string): Promise<{ id: string; email: string | null; username: string | null; firstName: string | null; lastName: string | null }[]>;
 
   // Composites
   getCompositeWorkflows(userId?: string): Promise<CompositeWorkflowWithItems[]>;

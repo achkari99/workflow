@@ -28,7 +28,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import type { Workflow, CompositeWorkflowWithItems, Step } from "@shared/schema";
 
-type ShareUser = { id: string; email: string | null; firstName: string | null; lastName: string | null };
+type ShareUser = { id: string; email: string | null; username: string | null; firstName: string | null; lastName: string | null };
 function ShareCompositeModal({
   composite,
   onClose,
@@ -140,7 +140,7 @@ function ShareCompositeModal({
       >
         <div className="p-6 border-b border-white/5 flex items-center justify-between">
           <div>
-              <h2 className="font-display text-2xl text-white tracking-widest uppercase">Share Workflow</h2>
+            <h2 className="font-display text-2xl text-white tracking-widest uppercase">Share Workflow</h2>
             <p className="text-white/40 text-xs font-mono mt-1 uppercase tracking-widest">{composite.name}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} className="text-white/20 hover:text-white">
@@ -152,8 +152,8 @@ function ShareCompositeModal({
           <button
             onClick={() => setMode("copy")}
             className={`px-4 py-2 text-xs font-mono uppercase tracking-widest border ${mode === "copy"
-                ? "border-primary/60 text-primary bg-primary/10"
-                : "border-white/10 text-white/50 hover:border-white/30"
+              ? "border-primary/60 text-primary bg-primary/10"
+              : "border-white/10 text-white/50 hover:border-white/30"
               }`}
           >
             Share Copy
@@ -161,8 +161,8 @@ function ShareCompositeModal({
           <button
             onClick={() => setMode("session")}
             className={`px-4 py-2 text-xs font-mono uppercase tracking-widest border ${mode === "session"
-                ? "border-primary/60 text-primary bg-primary/10"
-                : "border-white/10 text-white/50 hover:border-white/30"
+              ? "border-primary/60 text-primary bg-primary/10"
+              : "border-white/10 text-white/50 hover:border-white/30"
               }`}
           >
             Live Session
@@ -175,7 +175,7 @@ function ShareCompositeModal({
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by email..."
+              placeholder="Search by username or email..."
               className="w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
             />
             <div className="space-y-2 max-h-56 overflow-y-auto">
@@ -184,11 +184,11 @@ function ShareCompositeModal({
                   key={user.id}
                   onClick={() => toggleUser(user)}
                   className={`w-full text-left px-3 py-2 border text-xs transition-all ${selectedUsers.some((u) => u.id === user.id)
-                      ? "border-primary/40 bg-primary/10 text-white"
-                      : "border-white/10 text-white/60 hover:border-white/30"
+                    ? "border-primary/40 bg-primary/10 text-white"
+                    : "border-white/10 text-white/60 hover:border-white/30"
                     }`}
                 >
-                  {user.email || user.firstName || user.id}
+                  {user.username || user.email || user.firstName || user.id}
                 </button>
               ))}
             </div>
@@ -535,7 +535,7 @@ function CreateCompositeModal({
                   ) : (
                     <div className="flex items-center gap-3">
                       <Zap className="w-5 h-5" />
-                        Establish Master Workflow
+                      Establish Master Workflow
                     </div>
                   )}
                 </Button>
@@ -585,16 +585,16 @@ export default function CompositesPage() {
           Home
         </Button>
 
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => setShowCreateModal(true)}
-              className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider text-xs"
-              data-testid="button-create-composite"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Combine Workflows
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider text-xs"
+            data-testid="button-create-composite"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Combine Workflows
+          </Button>
+        </div>
       </header>
 
       <div className="container mx-auto max-w-4xl py-12 px-4">

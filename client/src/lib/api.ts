@@ -162,7 +162,7 @@ export async function removeShare(shareId: number): Promise<void> {
   if (!res.ok) throw new Error("Failed to remove share");
 }
 
-export async function searchUsers(query: string): Promise<{ id: string; email: string | null; firstName: string | null; lastName: string | null }[]> {
+export async function searchUsers(query: string): Promise<{ id: string; email: string | null; username: string | null; firstName: string | null; lastName: string | null }[]> {
   const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
   if (!res.ok) throw new Error("Failed to search users");
   return res.json();
