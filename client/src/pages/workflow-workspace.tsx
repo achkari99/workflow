@@ -102,54 +102,6 @@ function JourneyPath({
         </div>
       </div>
 
-      {isEditingStep && stepDetails && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-xl flex items-center justify-center z-50 p-4"
-          onClick={() => setIsEditingStep(false)}
-        >
-          <div
-            className="bg-black/90 border border-white/10 p-6 w-full max-w-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg text-white font-display">Edit Step</h3>
-              <Button variant="ghost" size="sm" onClick={() => setIsEditingStep(false)}>
-                <ChevronLeft className="w-4 h-4 text-white/40 rotate-180" />
-              </Button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Title</label>
-                <input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Description</label>
-                <textarea
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary min-h-[90px] resize-none"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-5">
-              <Button
-                onClick={() => editStepMutation.mutate()}
-                disabled={editStepMutation.isPending || !editName.trim()}
-                className="flex-1 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
-              >
-                {editStepMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-              <Button variant="ghost" onClick={() => setIsEditingStep(false)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -421,6 +373,7 @@ function ExecutionCenter({
           )}
         </div>
       </div>
+
     </div>
   );
 }
