@@ -13,6 +13,7 @@ import {
 import { fromError } from "zod-validation-error";
 import { broadcastSession } from "../realtime";
 import { supabase } from "../supabase";
+import { isAuthenticated } from "../auth";
 
 function getUserId(req: Request): string | undefined {
     return (req.user as any)?.id;
@@ -44,7 +45,7 @@ async function attachProofUrl<T extends { proofFilePath?: string | null }>(item:
 }
 
 export function registerCompositeRoutes(app: Express) {
-    app.get("/api/users/search", async (req, res) => {
+    app.get("/api/users/search", isAuthenticated, async (req, res) => {
         try {
             const query = req.query.q as string;
             if (!query || query.length < 2) {
@@ -57,7 +58,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.get("/api/composites", async (req, res) => {
+    app.get("/api/composites", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             const composites = await storage.getCompositeWorkflows(userId);
@@ -68,7 +69,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.get("/api/composites/:id", async (req, res) => {
+    app.get("/api/composites/:id", isAuthenticated, async (req, res) => {
         try {
             const id = parseInt(req.params.id);
             const composite = await storage.getCompositeWorkflowWithItems(id);
@@ -82,7 +83,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.post("/api/composites", async (req, res) => {
+    app.post("/api/composites", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             const { name, description, stepIds = [] } = req.body;
@@ -114,7 +115,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.post("/api/composites/:id/copy", async (req, res) => {
+    app.post("/api/composites/:id/copy", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -138,7 +139,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.post("/api/composites/:id/steps", async (req, res) => {
+    app.post("/api/composites/:id/steps", isAuthenticated, async (req, res) => {
         try {
             const compositeId = parseInt(req.params.id);
             const { stepId, orderIndex = 0 } = req.body;
@@ -150,7 +151,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.delete("/api/composites/:id", async (req, res) => {
+    app.delete("/api/composites/:id", isAuthenticated, async (req, res) => {
         try {
             const id = parseInt(req.params.id);
             const userId = getUserId(req);
@@ -169,7 +170,7 @@ export function registerCompositeRoutes(app: Express) {
     });
 
     // Session routes
-    app.post("/api/composite-sessions", async (req, res) => {
+    app.post("/api/composite-sessions", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -229,7 +230,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.get("/api/composite-sessions", async (req, res) => {
+    app.get("/api/composite-sessions", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -242,7 +243,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.get("/api/composite-sessions/:id", async (req, res) => {
+    app.get("/api/composite-sessions/:id", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -267,7 +268,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.delete("/api/composite-sessions/:id", async (req, res) => {
+    app.delete("/api/composite-sessions/:id", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -291,7 +292,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.post("/api/composite-sessions/:id/members", async (req, res) => {
+    app.post("/api/composite-sessions/:id/members", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -329,7 +330,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.patch("/api/composite-sessions/:sessionId/members/:memberId", async (req, res) => {
+    app.patch("/api/composite-sessions/:sessionId/members/:memberId", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -356,7 +357,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.delete("/api/composite-sessions/:sessionId/members/:memberId", async (req, res) => {
+    app.delete("/api/composite-sessions/:sessionId/members/:memberId", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -390,7 +391,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.post("/api/composite-sessions/:id/assignments", async (req, res) => {
+    app.post("/api/composite-sessions/:id/assignments", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -423,7 +424,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.patch("/api/composite-sessions/:id/assignments/:assignmentId", async (req, res) => {
+    app.patch("/api/composite-sessions/:id/assignments/:assignmentId", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -453,7 +454,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.post("/api/composite-sessions/:id/assignments/:assignmentId/delegates", async (req, res) => {
+    app.post("/api/composite-sessions/:id/assignments/:assignmentId/delegates", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -489,7 +490,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.delete("/api/composite-sessions/:id/assignments/:assignmentId/delegates/:delegateId", async (req, res) => {
+    app.delete("/api/composite-sessions/:id/assignments/:assignmentId/delegates/:delegateId", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -522,7 +523,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.delete("/api/composite-sessions/:id/assignments/:assignmentId", async (req, res) => {
+    app.delete("/api/composite-sessions/:id/assignments/:assignmentId", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -546,7 +547,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.post("/api/composite-sessions/:id/lane-delegates", async (req, res) => {
+    app.post("/api/composite-sessions/:id/lane-delegates", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -579,7 +580,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.delete("/api/composite-sessions/:id/lane-delegates/:delegateId", async (req, res) => {
+    app.delete("/api/composite-sessions/:id/lane-delegates/:delegateId", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -607,7 +608,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.patch("/api/composite-sessions/:id/steps/:sessionStepId", async (req, res) => {
+    app.patch("/api/composite-sessions/:id/steps/:sessionStepId", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -703,7 +704,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.patch("/api/composite-sessions/:id/steps/:sessionStepId/content", async (req, res) => {
+    app.patch("/api/composite-sessions/:id/steps/:sessionStepId/content", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -743,7 +744,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.patch("/api/composite-sessions/:id/steps/:sessionStepId/proof-config", async (req, res) => {
+    app.patch("/api/composite-sessions/:id/steps/:sessionStepId/proof-config", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -784,7 +785,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.patch("/api/composite-sessions/:id/steps/:sessionStepId/proof", async (req, res) => {
+    app.patch("/api/composite-sessions/:id/steps/:sessionStepId/proof", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -831,7 +832,7 @@ export function registerCompositeRoutes(app: Express) {
         // For now, let's assume it's handled in a consistent way.
     });
 
-    app.delete("/api/composite-sessions/:id/steps/:sessionStepId/proof", async (req, res) => {
+    app.delete("/api/composite-sessions/:id/steps/:sessionStepId/proof", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -870,7 +871,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.post("/api/composite-sessions/:id/intel", async (req, res) => {
+    app.post("/api/composite-sessions/:id/intel", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -907,7 +908,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.get("/api/composite-sessions/:id/intel", async (req, res) => {
+    app.get("/api/composite-sessions/:id/intel", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -930,7 +931,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.delete("/api/composite-sessions/:id/intel/:docId", async (req, res) => {
+    app.delete("/api/composite-sessions/:id/intel/:docId", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -961,7 +962,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.get("/api/composite-sessions/:id/messages", async (req, res) => {
+    app.get("/api/composite-sessions/:id/messages", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {
@@ -983,7 +984,7 @@ export function registerCompositeRoutes(app: Express) {
         }
     });
 
-    app.post("/api/composite-sessions/:id/messages", async (req, res) => {
+    app.post("/api/composite-sessions/:id/messages", isAuthenticated, async (req, res) => {
         try {
             const userId = getUserId(req);
             if (!userId) {

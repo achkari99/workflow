@@ -4,6 +4,7 @@ import { supabase } from "../supabase";
 import { insertIntelDocSchema } from "@shared/schema";
 import { fromError } from "zod-validation-error";
 import multer from "multer";
+import { isAuthenticated } from "../auth";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -47,7 +48,7 @@ async function canEditStepProof(step: any, userId?: string) {
 }
 
 export function registerIntelRoutes(app: Express) {
-    app.get("/api/steps/:id", async (req, res) => {
+    app.get("/api/steps/:id", isAuthenticated, async (req, res) => {
         try {
             const id = parseInt(req.params.id);
             const step = await storage.getStepWithDetails(id);
@@ -62,7 +63,7 @@ export function registerIntelRoutes(app: Express) {
         }
     });
 
-    app.get("/api/steps/:id/intel", async (req, res) => {
+    app.get("/api/steps/:id/intel", isAuthenticated, async (req, res) => {
         try {
             const stepId = parseInt(req.params.id);
             const docs = await storage.getIntelDocsByStep(stepId);
@@ -73,7 +74,7 @@ export function registerIntelRoutes(app: Express) {
         }
     });
 
-    app.post("/api/steps/:id/intel", async (req, res) => {
+    app.post("/api/steps/:id/intel", isAuthenticated, async (req, res) => {
         try {
             const stepId = parseInt(req.params.id);
             const validation = insertIntelDocSchema.safeParse({ ...req.body, stepId });
@@ -87,7 +88,7 @@ export function registerIntelRoutes(app: Express) {
         }
     });
 
-    app.post("/api/steps/:id/intel/upload", upload.single("file"), async (req, res) => {
+    app.post("/api/steps/:id/intel/upload", isAuthenticated, upload.single("file"), async (req, res) => {
         try {
             const stepId = parseInt(req.params.id);
             const { title, docType } = req.body;

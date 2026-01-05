@@ -25,19 +25,16 @@ import { eq, desc, asc, and, isNull, inArray } from "drizzle-orm";
 
 export class WorkflowStorage {
     async getWorkflows(userId?: string): Promise<WorkflowWithSteps[]> {
-        let owned: Workflow[];
-        if (userId) {
-            owned = await db.select().from(workflows).where(eq(workflows.ownerId, userId)).orderBy(desc(workflows.createdAt));
-            const sharedIds = await db.select({ workflowId: workflowShares.workflowId }).from(workflowShares).where(eq(workflowShares.sharedWithUserId, userId));
-            if (sharedIds.length > 0) {
-                const sharedWorkflows = await Promise.all(sharedIds.map(s => this.getWorkflow(s.workflowId)));
-                const allFlows = [...owned, ...sharedWorkflows.filter((w): w is Workflow => w !== undefined)];
-                return await Promise.all(allFlows.map(async (w) => (await this.getWorkflowWithSteps(w.id))!)) as WorkflowWithSteps[];
-            }
-        } else {
-            owned = await db.select().from(workflows).orderBy(desc(workflows.createdAt));
+        if (!userId) return [];
+        const owned = await db.select().from(workflows).where(eq(workflows.ownerId, userId)).orderBy(desc(workflows.createdAt));
+        const sharedIds = await db.select({ workflowId: workflowShares.workflowId }).from(workflowShares).where(eq(workflowShares.sharedWithUserId, userId));
+        let sharedWorkflows: Workflow[] = [];
+        if (sharedIds.length > 0) {
+            sharedWorkflows = await Promise.all(sharedIds.map(async s => await this.getWorkflow(s.workflowId)))
+                .then(flows => flows.filter((w): w is Workflow => w !== undefined));
         }
-        return await Promise.all(owned.map(async (w) => (await this.getWorkflowWithSteps(w.id))!)) as WorkflowWithSteps[];
+        const allFlows = [...owned, ...sharedWorkflows];
+        return await Promise.all(allFlows.map(async (w) => (await this.getWorkflowWithSteps(w.id))!)) as WorkflowWithSteps[];
     }
 
     async getWorkflow(id: number): Promise<Workflow | undefined> {
@@ -59,15 +56,8 @@ export class WorkflowStorage {
     }
 
     async getActiveWorkflow(userId?: string): Promise<WorkflowWithSteps | undefined> {
-        let workflow: Workflow | undefined;
-        if (userId) {
-            const [res] = await db.select().from(workflows).where(and(eq(workflows.isActive, true), eq(workflows.ownerId, userId)));
-            workflow = res;
-        } else {
-            const [res] = await db.select().from(workflows).where(eq(workflows.isActive, true));
-            workflow = res;
-        }
-
+        if (!userId) return undefined;
+        const [workflow] = await db.select().from(workflows).where(and(eq(workflows.isActive, true), eq(workflows.ownerId, userId)));
         if (!workflow) return undefined;
         return this.getWorkflowWithSteps(workflow.id);
     }

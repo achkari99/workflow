@@ -53,11 +53,11 @@ export class CompositeStorage {
     }
 
     async getCompositeWorkflows(userId?: string): Promise<CompositeWorkflowWithItems[]> {
-        let query = db.select().from(compositeWorkflows).$dynamic();
-        if (userId) {
-            query = query.where(eq(compositeWorkflows.ownerId, userId));
-        }
-        const composites = await query.orderBy(desc(compositeWorkflows.createdAt));
+        if (!userId) return [];
+        const composites = await db.select()
+            .from(compositeWorkflows)
+            .where(eq(compositeWorkflows.ownerId, userId))
+            .orderBy(desc(compositeWorkflows.createdAt));
 
         return await Promise.all(composites.map(async (c) => {
             const compositeItems = await db.select({

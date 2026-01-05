@@ -3,6 +3,9 @@ import { storage } from "../storage";
 
 export function registerRootRoutes(app: Express) {
     app.post("/api/seed", async (req, res) => {
+        if (process.env.NODE_ENV === "production") {
+            return res.status(403).json({ error: "Seed route is disabled in production" });
+        }
         try {
             const existingWorkflows = await storage.getWorkflows();
             if (existingWorkflows.length > 0) {
