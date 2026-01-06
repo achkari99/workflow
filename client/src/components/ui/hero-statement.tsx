@@ -8,26 +8,67 @@ export function HeroStatement() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="mb-12 relative z-10"
+      className="mb-12 relative z-10 flex flex-col items-center md:items-start"
     >
-      <h1 className="text-6xl md:text-8xl font-display font-black tracking-tighter leading-[0.85] text-white">
-        {words.map((word, i) => (
+      {/* Logo */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.7, ease: "easeOut" }}
+        className="mb-10"
+      >
+        <img
+          src="/coWorkflow_logo1.png"
+          alt="coWorkflow"
+          className="h-32 md:h-40 lg:h-48 w-auto"
+        />
+      </motion.div>
+
+      {/* Text beneath logo */}
+      <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-black tracking-tighter leading-[0.85] text-white text-center md:text-left">
+        {/* BUILD on first line */}
+        <motion.span
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            delay: 0.5,
+            duration: 0.5,
+            ease: "easeOut",
+          }}
+          className="block"
+        >
+          {words[0]}
+        </motion.span>
+
+        {/* VALIDATE and SHIP on same line */}
+        <div className="block">
           <motion.span
-            key={word}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{
-              delay: i * 0.15,
+              delay: 0.65,
               duration: 0.5,
               ease: "easeOut",
             }}
-            className={`block ${i === 1 ? "text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/50" : ""}`}
+            className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/50 mr-4"
           >
-            {word}
+            {words[1]}
           </motion.span>
-        ))}
+          <motion.span
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              delay: 0.8,
+              duration: 0.5,
+              ease: "easeOut",
+            }}
+            className="inline-block"
+          >
+            {words[2]}
+          </motion.span>
+        </div>
       </h1>
-      
+
       <motion.div
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
