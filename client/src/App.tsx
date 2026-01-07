@@ -17,6 +17,7 @@ import SessionsHub from "@/pages/sessions-hub";
 import WorkflowControl from "@/pages/workflow-control";
 import CompositeControl from "@/pages/composite-control";
 import NotesPage from "@/pages/notes";
+import AudioFooter from "@/components/audio-footer";
 import AuthPage from "@/pages/auth-page";
 import ProfilePage from "@/pages/profile";
 import NotFound from "@/pages/not-found";
@@ -119,9 +120,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <div className="min-h-screen bg-black text-zinc-100 font-sans antialiased selection:bg-lime-500/30">
+        <div className="min-h-screen bg-black text-zinc-100 font-sans antialiased selection:bg-lime-500/30 pb-24">
           <Toaster position="bottom-right" theme="dark" />
           <Router />
+          <AudioFooter />
         </div>
       </TooltipProvider>
     </QueryClientProvider>

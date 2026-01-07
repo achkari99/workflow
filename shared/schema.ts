@@ -204,6 +204,20 @@ export const activities = pgTable("activities", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const audioTracks = pgTable("audio_tracks", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  album: text("album"),
+  filePath: text("file_path").notNull(),
+  fileName: text("file_name").notNull(),
+  mimeType: text("mime_type"),
+  fileSize: integer("file_size"),
+  durationSec: integer("duration_sec"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const notes = pgTable("notes", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -248,6 +262,13 @@ export const activityRelations = relations(activities, ({ one }) => ({
   }),
 }));
 
+export const audioTrackRelations = relations(audioTracks, ({ one }) => ({
+  user: one(users, {
+    fields: [audioTracks.userId],
+    references: [users.id],
+  }),
+}));
+
 export const noteRelations = relations(notes, ({ one }) => ({
   user: one(users, {
     fields: [notes.userId],
@@ -281,6 +302,12 @@ export const insertIntelDocSchema = createInsertSchema(intelDocs).omit({
 export const insertActivitySchema = createInsertSchema(activities).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertAudioTrackSchema = createInsertSchema(audioTracks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertNoteSchema = createInsertSchema(notes).omit({
@@ -363,6 +390,8 @@ export type InsertIntelDoc = z.infer<typeof insertIntelDocSchema>;
 export type IntelDoc = typeof intelDocs.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type Activity = typeof activities.$inferSelect;
+export type InsertAudioTrack = z.infer<typeof insertAudioTrackSchema>;
+export type AudioTrack = typeof audioTracks.$inferSelect;
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Note = typeof notes.$inferSelect;
 export type InsertWorkflowShare = z.infer<typeof insertWorkflowShareSchema>;

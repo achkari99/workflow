@@ -6,6 +6,7 @@ import { registerIntelRoutes } from "./routes/intel";
 import { registerCompositeRoutes } from "./routes/composites";
 import { registerRootRoutes } from "./routes/root";
 import { registerNoteRoutes } from "./routes/notes";
+import { registerAudioRoutes } from "./routes/audio";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication first
@@ -17,6 +18,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCompositeRoutes(app);
   registerRootRoutes(app);
   registerNoteRoutes(app);
+  registerAudioRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

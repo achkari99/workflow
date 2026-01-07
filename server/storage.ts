@@ -17,6 +17,8 @@ import {
   type InsertWorkflowShare,
   type Note,
   type InsertNote,
+  type AudioTrack,
+  type InsertAudioTrack,
   type CompositeWorkflowWithItems,
   type CompositeWorkflow,
   type InsertCompositeWorkflow,
@@ -81,6 +83,13 @@ export interface IStorage {
   createNote(note: InsertNote): Promise<Note>;
   updateNote(id: number, note: Partial<InsertNote>): Promise<Note | undefined>;
   deleteNote(id: number): Promise<boolean>;
+
+  // Audio tracks
+  getAudioTrack(id: number): Promise<AudioTrack | undefined>;
+  getAudioTracksByUser(userId: string): Promise<AudioTrack[]>;
+  createAudioTrack(track: InsertAudioTrack): Promise<AudioTrack>;
+  updateAudioTrack(id: number, track: Partial<InsertAudioTrack>): Promise<AudioTrack | undefined>;
+  deleteAudioTrack(id: number): Promise<boolean>;
 
   // Sharing
   getWorkflowShares(workflowId: number): Promise<WorkflowShare[]>;

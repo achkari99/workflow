@@ -1,4 +1,4 @@
-import type { Workflow, InsertWorkflow, Step, IntelDoc, Activity, WorkflowWithSteps, StepWithDetails, WorkflowShare, CompositeWorkflow, CompositeWorkflowWithItems, Note } from "@shared/schema";
+import type { Workflow, InsertWorkflow, Step, IntelDoc, Activity, WorkflowWithSteps, StepWithDetails, WorkflowShare, CompositeWorkflow, CompositeWorkflowWithItems, Note, AudioTrack } from "@shared/schema";
 
 export async function getActiveWorkflow(): Promise<WorkflowWithSteps | null> {
   const res = await fetch("/api/workflows/active");
@@ -75,6 +75,48 @@ export async function updateNote(id: number, payload: { title?: string; content?
 export async function deleteNote(id: number): Promise<void> {
   const res = await fetch(`/api/notes/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete note");
+}
+
+export async function getAudioTracks(): Promise<(AudioTrack & { fileUrl?: string | null })[]> {
+  const res = await fetch("/api/audio");
+  if (!res.ok) throw new Error("Failed to fetch audio tracks");
+  return res.json();
+}
+
+export async function uploadAudioTrack(payload: {
+  file: File;
+  title?: string;
+  album?: string | null;
+  durationSec?: number | null;
+}): Promise<AudioTrack & { fileUrl?: string | null }> {
+  const body = new FormData();
+  body.append("file", payload.file);
+  if (payload.title) body.append("title", payload.title);
+  if (payload.album) body.append("album", payload.album);
+  if (payload.durationSec !== undefined && payload.durationSec !== null) {
+    body.append("durationSec", String(payload.durationSec));
+  }
+  const res = await fetch("/api/audio/upload", { method: "POST", body });
+  if (!res.ok) throw new Error("Failed to upload audio");
+  return res.json();
+}
+
+export async function updateAudioTrack(
+  id: number,
+  payload: { title?: string; album?: string | null }
+): Promise<AudioTrack> {
+  const res = await fetch(`/api/audio/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update audio");
+  return res.json();
+}
+
+export async function deleteAudioTrack(id: number): Promise<void> {
+  const res = await fetch(`/api/audio/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete audio");
 }
 
 export async function updateWorkflow(id: number, data: Partial<InsertWorkflow>): Promise<Workflow> {

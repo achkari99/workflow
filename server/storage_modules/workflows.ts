@@ -6,6 +6,7 @@ import {
     activities,
     workflowShares,
     notes,
+    audioTracks,
     type Workflow,
     type InsertWorkflow,
     type Step,
@@ -18,6 +19,8 @@ import {
     type InsertActivity,
     type Note,
     type InsertNote,
+    type AudioTrack,
+    type InsertAudioTrack,
     type WorkflowWithSteps,
     type StepWithDetails,
     type WorkflowShare,
@@ -293,6 +296,38 @@ export class WorkflowStorage {
 
     async deleteNote(id: number): Promise<boolean> {
         await db.delete(notes).where(eq(notes.id, id));
+        return true;
+    }
+
+    async getAudioTrack(id: number): Promise<AudioTrack | undefined> {
+        const [track] = await db.select().from(audioTracks).where(eq(audioTracks.id, id));
+        return track || undefined;
+    }
+
+    async getAudioTracksByUser(userId: string): Promise<AudioTrack[]> {
+        return await db
+            .select()
+            .from(audioTracks)
+            .where(eq(audioTracks.userId, userId))
+            .orderBy(desc(audioTracks.updatedAt));
+    }
+
+    async createAudioTrack(track: InsertAudioTrack): Promise<AudioTrack> {
+        const [created] = await db.insert(audioTracks).values(track).returning();
+        return created;
+    }
+
+    async updateAudioTrack(id: number, track: Partial<InsertAudioTrack>): Promise<AudioTrack | undefined> {
+        const [updated] = await db
+            .update(audioTracks)
+            .set({ ...track, updatedAt: new Date() })
+            .where(eq(audioTracks.id, id))
+            .returning();
+        return updated || undefined;
+    }
+
+    async deleteAudioTrack(id: number): Promise<boolean> {
+        await db.delete(audioTracks).where(eq(audioTracks.id, id));
         return true;
     }
 }
