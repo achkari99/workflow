@@ -16,6 +16,7 @@ import CompositeSessions from "@/pages/composite-sessions";
 import SessionsHub from "@/pages/sessions-hub";
 import WorkflowControl from "@/pages/workflow-control";
 import CompositeControl from "@/pages/composite-control";
+import NotesPage from "@/pages/notes";
 import AuthPage from "@/pages/auth-page";
 import ProfilePage from "@/pages/profile";
 import NotFound from "@/pages/not-found";
@@ -63,6 +64,9 @@ function Router() {
       </Route>
       <Route path="/missions/new">
         {(params) => <ProtectedRoute component={WorkflowCreate} path="/missions/new" {...params} />}
+      </Route>
+      <Route path="/notes">
+        {(params) => <ProtectedRoute component={NotesPage} path="/notes" {...params} />}
       </Route>
       <Route path="/intel/:workflowId/:stepId?">
         {(params) => <ProtectedRoute component={IntelPage} path="/intel/:workflowId/:stepId?" {...params} />}

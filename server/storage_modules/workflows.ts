@@ -5,6 +5,7 @@ import {
     intelDocs,
     activities,
     workflowShares,
+    notes,
     type Workflow,
     type InsertWorkflow,
     type Step,
@@ -15,6 +16,8 @@ import {
     type InsertIntelDoc,
     type Activity,
     type InsertActivity,
+    type Note,
+    type InsertNote,
     type WorkflowWithSteps,
     type StepWithDetails,
     type WorkflowShare,
@@ -264,5 +267,32 @@ export class WorkflowStorage {
 
         const flows = await db.select().from(workflows).where(inArray(workflows.id, workflowIds));
         return await Promise.all(flows.map(async (w) => (await this.getWorkflowWithSteps(w.id))!)) as WorkflowWithSteps[];
+    }
+
+    async getNotesByUser(userId: string): Promise<Note[]> {
+        return await db
+            .select()
+            .from(notes)
+            .where(eq(notes.userId, userId))
+            .orderBy(desc(notes.updatedAt));
+    }
+
+    async createNote(note: InsertNote): Promise<Note> {
+        const [created] = await db.insert(notes).values(note).returning();
+        return created;
+    }
+
+    async updateNote(id: number, note: Partial<InsertNote>): Promise<Note | undefined> {
+        const [updated] = await db
+            .update(notes)
+            .set({ ...note, updatedAt: new Date() })
+            .where(eq(notes.id, id))
+            .returning();
+        return updated || undefined;
+    }
+
+    async deleteNote(id: number): Promise<boolean> {
+        await db.delete(notes).where(eq(notes.id, id));
+        return true;
     }
 }

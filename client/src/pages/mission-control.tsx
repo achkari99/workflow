@@ -5,7 +5,7 @@ import { AmbientBackground } from "@/components/ui/ambient-background";
 import bgTexture from "@assets/generated_images/subtle_dark_digital_noise_texture_with_faint_grid_overlay.png";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getActiveWorkflow, getWorkflows, advanceWorkflow } from "@/lib/api";
-import { Loader2, Plus, List, Layers, Users, LogIn, LogOut, User } from "lucide-react";
+import { Loader2, Plus, List, Layers, Users, LogIn, LogOut, User, StickyNote } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -113,6 +113,16 @@ export default function MissionControl() {
             >
               <Users className="w-4 h-4 mr-2" />
               Sessions
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/notes")}
+              className="text-white/50 hover:text-white hover:bg-white/5"
+              data-testid="button-notes"
+            >
+              <StickyNote className="w-4 h-4 mr-2" />
+              Notes
             </Button>
             <Button
               variant="ghost"

@@ -15,6 +15,8 @@ import {
   type InsertActivity,
   type WorkflowShare,
   type InsertWorkflowShare,
+  type Note,
+  type InsertNote,
   type CompositeWorkflowWithItems,
   type CompositeWorkflow,
   type InsertCompositeWorkflow,
@@ -73,6 +75,12 @@ export interface IStorage {
   // Activities
   getActivitiesByWorkflow(workflowId: number): Promise<Activity[]>;
   createActivity(activity: InsertActivity): Promise<Activity>;
+
+  // Notes
+  getNotesByUser(userId: string): Promise<Note[]>;
+  createNote(note: InsertNote): Promise<Note>;
+  updateNote(id: number, note: Partial<InsertNote>): Promise<Note | undefined>;
+  deleteNote(id: number): Promise<boolean>;
 
   // Sharing
   getWorkflowShares(workflowId: number): Promise<WorkflowShare[]>;

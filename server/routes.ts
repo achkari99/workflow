@@ -5,6 +5,7 @@ import { registerWorkflowRoutes } from "./routes/workflows";
 import { registerIntelRoutes } from "./routes/intel";
 import { registerCompositeRoutes } from "./routes/composites";
 import { registerRootRoutes } from "./routes/root";
+import { registerNoteRoutes } from "./routes/notes";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication first
@@ -15,6 +16,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerIntelRoutes(app);
   registerCompositeRoutes(app);
   registerRootRoutes(app);
+  registerNoteRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

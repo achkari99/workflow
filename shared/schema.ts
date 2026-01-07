@@ -204,6 +204,15 @@ export const activities = pgTable("activities", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const notes = pgTable("notes", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  content: text("content"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const workflowRelations = relations(workflows, ({ many }) => ({
   steps: many(steps),
   activities: many(activities),
@@ -239,6 +248,13 @@ export const activityRelations = relations(activities, ({ one }) => ({
   }),
 }));
 
+export const noteRelations = relations(notes, ({ one }) => ({
+  user: one(users, {
+    fields: [notes.userId],
+    references: [users.id],
+  }),
+}));
+
 export const insertWorkflowSchema = createInsertSchema(workflows).omit({
   id: true,
   createdAt: true,
@@ -265,6 +281,12 @@ export const insertIntelDocSchema = createInsertSchema(intelDocs).omit({
 export const insertActivitySchema = createInsertSchema(activities).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertNoteSchema = createInsertSchema(notes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertWorkflowShareSchema = createInsertSchema(workflowShares).omit({
@@ -341,6 +363,8 @@ export type InsertIntelDoc = z.infer<typeof insertIntelDocSchema>;
 export type IntelDoc = typeof intelDocs.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type Activity = typeof activities.$inferSelect;
+export type InsertNote = z.infer<typeof insertNoteSchema>;
+export type Note = typeof notes.$inferSelect;
 export type InsertWorkflowShare = z.infer<typeof insertWorkflowShareSchema>;
 export type WorkflowShare = typeof workflowShares.$inferSelect;
 export type InsertCompositeWorkflow = z.infer<typeof insertCompositeWorkflowSchema>;
