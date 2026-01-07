@@ -128,8 +128,8 @@
     @apply font-sans antialiased bg-background text-foreground;
     font-feature-settings: "ss01", "ss02", "cv01", "cv02";
   }
-  body.app-footer-hidden {
-    padding-bottom: 0;
+  body.app-footer-hidden .app-shell {
+    padding-bottom: 0 !important;
   }
 }
 

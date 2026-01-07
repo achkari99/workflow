@@ -120,7 +120,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <div className="min-h-screen bg-black text-zinc-100 font-sans antialiased selection:bg-lime-500/30 pb-24">
+        <div className="app-shell min-h-screen bg-black text-zinc-100 font-sans antialiased selection:bg-lime-500/30 pb-24">
           <Toaster position="bottom-right" theme="dark" />
           <Router />
           <AudioFooter />

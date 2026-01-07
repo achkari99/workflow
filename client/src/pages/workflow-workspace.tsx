@@ -211,24 +211,18 @@ function ExecutionCenter({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        <div className="border border-white/10 bg-white/5 p-5">
+      <div className="flex-1 overflow-y-auto p-6 flex flex-col">
+        <div className="border border-white/10 bg-white/5 p-5 space-y-4 flex-1 flex flex-col">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Step Brief</p>
             <span className={`text-[10px] font-mono uppercase tracking-widest ${isProofRequired ? "text-primary" : "text-white/30"}`}>
               {isProofRequired ? "Proof required" : "Proof optional"}
             </span>
           </div>
-          <h3 className="text-lg text-white mt-3">{step.name}</h3>
-          <p className="text-sm text-white/50 mt-2">{step.description || "Add a step description."}</p>
-          {!isProofRequired && (
-            <p className="text-[10px] text-white/30 mt-3 font-mono uppercase tracking-widest">
-              Proof not required for this step.
-            </p>
-          )}
-        </div>
-
-        <div className="border border-white/10 bg-white/5 p-5 space-y-3">
+          <div>
+            <h3 className="text-lg text-white">{step.name}</h3>
+            <p className="text-sm text-white/50 mt-2">{step.description || "Add a step description."}</p>
+          </div>
           <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
             Submission{isProofRequired ? ": Proofs are required for this step" : ""}
           </p>
@@ -237,7 +231,7 @@ function ExecutionCenter({
             onChange={(e) => onProofContentChange(e.target.value)}
             placeholder={isProofRequired ? "Write your proof..." : "No proof needed"}
             disabled={!canEditProof || !isProofRequired || (!isEditingProof && isProofSubmitted)}
-            className="w-full bg-black/30 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[180px] resize-none disabled:opacity-40"
+            className="w-full flex-1 bg-black/30 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[140px] resize-none disabled:opacity-40"
           />
           {(proofFile || proofFileUrl) && (
             <div className="text-xs text-white/50">
@@ -250,46 +244,45 @@ function ExecutionCenter({
               )}
             </div>
           )}
-        </div>
-
-        <div className="border border-white/10 bg-white/5 p-5 flex items-center gap-3">
-          <Button
-            onClick={() => {
-              if (!isProofRequired) return;
-              if (isProofSubmitted && !isEditingProof) {
-                onToggleEditProof();
-                return;
+          <div className="flex items-center gap-3 mt-auto">
+            <Button
+              onClick={() => {
+                if (!isProofRequired) return;
+                if (isProofSubmitted && !isEditingProof) {
+                  onToggleEditProof();
+                  return;
+                }
+                onSubmitProof();
+              }}
+              disabled={
+                !isProofRequired ||
+                !canEditProof ||
+                isSubmittingProof ||
+                (!(isProofSubmitted && !isEditingProof) && !proofContent.trim() && !proofFile)
               }
-              onSubmitProof();
-            }}
-            disabled={
-              !isProofRequired ||
-              !canEditProof ||
-              isSubmittingProof ||
-              (!(isProofSubmitted && !isEditingProof) && !proofContent.trim() && !proofFile)
-            }
-            className="flex-1 h-12 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
-          >
-            {isSubmittingProof ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : null}
-            {isProofSubmitted && !isEditingProof ? "Edit Proofs" : "Submit Proofs"}
-          </Button>
-          <label
-            htmlFor={proofFileInputId}
-            className={`h-12 px-4 border border-white/10 text-xs font-mono uppercase tracking-widest flex items-center justify-center cursor-pointer ${!isProofRequired || !canEditProof || (isProofSubmitted && !isEditingProof) ? "opacity-40 cursor-not-allowed" : "hover:border-primary/50"
-              }`}
-          >
-            Upload
-          </label>
-          <input
-            id={proofFileInputId}
-            type="file"
-            accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/json,text/*,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            onChange={(e) => onSelectProofFile(e.target.files?.[0] || null)}
-            disabled={!isProofRequired || !canEditProof || (isProofSubmitted && !isEditingProof)}
-            className="hidden"
-          />
+              className="flex-1 h-11 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
+            >
+              {isSubmittingProof ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
+              {isProofSubmitted && !isEditingProof ? "Edit Proofs" : "Submit Proofs"}
+            </Button>
+            <label
+              htmlFor={proofFileInputId}
+              className={`h-11 px-4 border border-white/10 text-xs font-mono uppercase tracking-widest flex items-center justify-center cursor-pointer ${!isProofRequired || !canEditProof || (isProofSubmitted && !isEditingProof) ? "opacity-40 cursor-not-allowed" : "hover:border-primary/50"
+                }`}
+            >
+              Upload
+            </label>
+            <input
+              id={proofFileInputId}
+              type="file"
+              accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/json,text/*,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              onChange={(e) => onSelectProofFile(e.target.files?.[0] || null)}
+              disabled={!isProofRequired || !canEditProof || (isProofSubmitted && !isEditingProof)}
+              className="hidden"
+            />
+          </div>
         </div>
       </div>
       <div className="border-t border-white/5 p-4 bg-black/30">
