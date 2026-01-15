@@ -218,6 +218,15 @@ export const audioTracks = pgTable("audio_tracks", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const dailyTasks = pgTable("daily_tasks", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  isCompleted: boolean("is_completed").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const notes = pgTable("notes", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -269,6 +278,13 @@ export const audioTrackRelations = relations(audioTracks, ({ one }) => ({
   }),
 }));
 
+export const dailyTaskRelations = relations(dailyTasks, ({ one }) => ({
+  user: one(users, {
+    fields: [dailyTasks.userId],
+    references: [users.id],
+  }),
+}));
+
 export const noteRelations = relations(notes, ({ one }) => ({
   user: one(users, {
     fields: [notes.userId],
@@ -305,6 +321,12 @@ export const insertActivitySchema = createInsertSchema(activities).omit({
 });
 
 export const insertAudioTrackSchema = createInsertSchema(audioTracks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDailyTaskSchema = createInsertSchema(dailyTasks).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -392,6 +414,8 @@ export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type Activity = typeof activities.$inferSelect;
 export type InsertAudioTrack = z.infer<typeof insertAudioTrackSchema>;
 export type AudioTrack = typeof audioTracks.$inferSelect;
+export type InsertDailyTask = z.infer<typeof insertDailyTaskSchema>;
+export type DailyTask = typeof dailyTasks.$inferSelect;
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Note = typeof notes.$inferSelect;
 export type InsertWorkflowShare = z.infer<typeof insertWorkflowShareSchema>;

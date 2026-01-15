@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { useEffect, useState, useId } from "react";
+import { useEffect, useRef, useState, useId } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getWorkflow, getStep, startStep, completeStep, advanceWorkflow, requestApproval, addIntelDoc, uploadIntelDoc, submitStepProof, uploadStepProof, updateStep } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,6 +23,8 @@ import {
   BookOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { MobileHeaderMenu } from "@/components/ui/mobile-header-menu";
 import type { Step, StepWithDetails, IntelDoc } from "@shared/schema";
 
 type IntelDocWithFile = IntelDoc & { fileUrl?: string | null };
@@ -53,7 +55,7 @@ function JourneyPath({
         <p className="text-xs text-white/40 mt-1 font-mono uppercase tracking-widest">Journey Path</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 max-h-[45vh] lg:max-h-none">
         <div className="relative">
           <div className="absolute left-[19px] top-4 bottom-4 w-px bg-gradient-to-b from-primary/50 via-white/10 to-white/5" />
 
@@ -413,7 +415,7 @@ function IntelPanel({
 
   if (!step) {
     return (
-      <div className="h-full flex flex-col bg-black/40 border-l border-white/5">
+      <div className="h-full flex flex-col bg-black/40 border-t border-white/5 lg:border-t-0 lg:border-l">
         <div className="p-6 border-b border-white/5">
           <h2 className="font-display text-lg text-white/90 tracking-wide">Intel</h2>
           <p className="text-xs text-white/40 mt-1 font-mono uppercase tracking-widest">Documentation & Notes</p>
@@ -426,7 +428,7 @@ function IntelPanel({
   }
 
   return (
-    <div className="h-full flex flex-col bg-black/40 border-l border-white/5">
+    <div className="h-full flex flex-col bg-black/40 border-t border-white/5 lg:border-t-0 lg:border-l">
       <div className="p-6 border-b border-white/5 flex items-center justify-between">
         <div>
           <h2 className="font-display text-lg text-white/90 tracking-wide">Intel</h2>
@@ -772,8 +774,13 @@ export default function WorkflowWorkspace() {
     },
   });
 
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
   const handleSelectStep = (step: Step) => {
     setSelectedStepId(step.id);
+    requestAnimationFrame(() => {
+      contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   if (!workflowId) {
@@ -807,6 +814,24 @@ export default function WorkflowWorkspace() {
     );
   }
 
+  const intelPanel = (
+    <IntelPanel
+      step={stepDetails || null}
+      onStartStep={() => startMutation.mutate()}
+      onCompleteStep={() => completeMutation.mutate()}
+      onRequestApproval={() => approvalMutation.mutate()}
+      onNextStep={(() => {
+        const currentIndex = workflow.steps.findIndex(s => s.id === selectedStepId);
+        if (currentIndex !== -1 && currentIndex < workflow.steps.length - 1) {
+          return () => setSelectedStepId(workflow.steps[currentIndex + 1].id);
+        }
+        return undefined;
+      })()}
+      isActionPending={startMutation.isPending || completeMutation.isPending || approvalMutation.isPending}
+      isProofSatisfied={isProofSatisfied}
+    />
+  );
+
   return (
     <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
       <header className="h-14 border-b border-white/5 bg-black/40 flex items-center px-4 shrink-0">
@@ -820,6 +845,24 @@ export default function WorkflowWorkspace() {
           <ChevronLeft className="w-4 h-4 mr-1" />
           Home
         </Button>
+
+        <div className="lg:hidden mr-2">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-white/60 hover:text-white">
+                Steps
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="bg-black/95 border-white/10 p-0 w-[85vw] max-w-xs">
+              <JourneyPath
+                steps={workflow.steps}
+                currentStepId={selectedStepId}
+                onSelectStep={handleSelectStep}
+                workflowName={workflow.name}
+              />
+            </SheetContent>
+          </Sheet>
+        </div>
 
         <div className="flex-1 flex items-center justify-center gap-3">
           <motion.span
@@ -839,17 +882,22 @@ export default function WorkflowWorkspace() {
           >
             Manage
           </Button>
-          <div className="text-xs font-mono text-white/40">
+          <div className="hidden md:block text-xs font-mono text-white/40">
             Step {workflow.currentStep} of {workflow.totalSteps}
           </div>
+          <MobileHeaderMenu title="Mission">
+            <div className="text-xs font-mono uppercase tracking-widest text-white/40">
+              Step {workflow.currentStep} of {workflow.totalSteps}
+            </div>
+          </MobileHeaderMenu>
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         <motion.div
           initial={{ x: -50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          className="w-72 shrink-0"
+          className="hidden lg:block w-72 shrink-0"
         >
           <JourneyPath
             steps={workflow.steps}
@@ -864,6 +912,7 @@ export default function WorkflowWorkspace() {
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1 }}
           className="flex-1 bg-gradient-to-br from-black/20 to-black/40"
+          ref={contentRef}
         >
           <ExecutionCenter
             step={stepDetails || null}
@@ -898,28 +947,21 @@ export default function WorkflowWorkspace() {
           />
         </motion.div>
 
-        <motion.div
-          initial={{ x: 50, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="w-80 shrink-0"
-        >
-          <IntelPanel
-            step={stepDetails || null}
-            onStartStep={() => startMutation.mutate()}
-            onCompleteStep={() => completeMutation.mutate()}
-            onRequestApproval={() => approvalMutation.mutate()}
-            onNextStep={(() => {
-              const currentIndex = workflow.steps.findIndex(s => s.id === selectedStepId);
-              if (currentIndex !== -1 && currentIndex < workflow.steps.length - 1) {
-                return () => setSelectedStepId(workflow.steps[currentIndex + 1].id);
-              }
-              return undefined;
-            })()}
-            isActionPending={startMutation.isPending || completeMutation.isPending || approvalMutation.isPending}
-            isProofSatisfied={isProofSatisfied}
-          />
-        </motion.div>
+      </div>
+      <div className="lg:hidden">
+        <Sheet>
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              className="fixed right-0 top-1/2 -translate-y-1/2 bg-black/80 border border-white/10 px-3 py-2 text-xs font-mono uppercase tracking-widest text-white/70 hover:text-white z-40"
+            >
+              Intel
+            </button>
+          </SheetTrigger>
+          <SheetContent side="right" className="bg-black/95 border-white/10 p-0 w-[85vw] max-w-xs">
+            {intelPanel}
+          </SheetContent>
+        </Sheet>
       </div>
     </div>
   );

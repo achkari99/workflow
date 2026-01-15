@@ -1,4 +1,4 @@
-import type { Workflow, InsertWorkflow, Step, IntelDoc, Activity, WorkflowWithSteps, StepWithDetails, WorkflowShare, CompositeWorkflow, CompositeWorkflowWithItems, Note, AudioTrack } from "@shared/schema";
+import type { Workflow, InsertWorkflow, Step, IntelDoc, Activity, WorkflowWithSteps, StepWithDetails, WorkflowShare, CompositeWorkflow, CompositeWorkflowWithItems, Note, AudioTrack, DailyTask } from "@shared/schema";
 
 export async function getActiveWorkflow(): Promise<WorkflowWithSteps | null> {
   const res = await fetch("/api/workflows/active");
@@ -117,6 +117,40 @@ export async function updateAudioTrack(
 export async function deleteAudioTrack(id: number): Promise<void> {
   const res = await fetch(`/api/audio/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete audio");
+}
+
+export async function getDailyTasks(): Promise<DailyTask[]> {
+  const res = await fetch("/api/daily");
+  if (!res.ok) throw new Error("Failed to fetch daily tasks");
+  return res.json();
+}
+
+export async function createDailyTask(payload: { title: string }): Promise<DailyTask> {
+  const res = await fetch("/api/daily", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to create daily task");
+  return res.json();
+}
+
+export async function updateDailyTask(
+  id: number,
+  payload: { title?: string; isCompleted?: boolean }
+): Promise<DailyTask> {
+  const res = await fetch(`/api/daily/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update daily task");
+  return res.json();
+}
+
+export async function deleteDailyTask(id: number): Promise<void> {
+  const res = await fetch(`/api/daily/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete daily task");
 }
 
 export async function updateWorkflow(id: number, data: Partial<InsertWorkflow>): Promise<Workflow> {

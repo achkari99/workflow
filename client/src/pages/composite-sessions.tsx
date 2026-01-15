@@ -492,9 +492,9 @@ export default function CompositeSessionsPage() {
           </div>
         </header>
 
-        <div className={isSingleSession ? "min-h-[calc(100vh-64px)]" : "grid grid-cols-[280px_1fr] min-h-[calc(100vh-64px)]"}>
+        <div className={isSingleSession ? "min-h-[calc(100vh-64px)]" : "grid grid-cols-1 lg:grid-cols-[280px_1fr] min-h-[calc(100vh-64px)]"}>
           {!isSingleSession && (
-            <aside className="border-r border-white/10 bg-black/70 backdrop-blur p-4 shadow-[inset_-1px_0_0_rgba(255,255,255,0.03)]">
+            <aside className="hidden lg:block border-r border-white/10 bg-black/70 backdrop-blur p-4 shadow-[inset_-1px_0_0_rgba(255,255,255,0.03)]">
               <h2 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-4">Live Sessions</h2>
               {isLoading ? (
                 <div className="flex justify-center py-10">
@@ -522,7 +522,36 @@ export default function CompositeSessionsPage() {
             </aside>
           )}
 
-          <main className={isSingleSession ? "p-8 flex justify-center" : "p-8"}>
+          <main className={isSingleSession ? "p-6 sm:p-8 flex justify-center" : "p-6 sm:p-8"}>
+            {!isSingleSession && (
+              <div className="mb-6 lg:hidden">
+                <h2 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-3">Live Sessions</h2>
+                {isLoading ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  </div>
+                ) : !sessions || sessions.length === 0 ? (
+                  <div className="text-xs text-white/40">No sessions yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {sessions.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedSessionId(item.id)}
+                        className={`w-full text-left border px-3 py-2 text-xs transition-colors ${
+                          selectedSessionId === item.id
+                            ? "border-primary/50 bg-primary/10 text-white"
+                            : "border-white/10 text-white/60 hover:border-white/30"
+                        }`}
+                      >
+                        <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Session</p>
+                        <p className="text-sm text-white truncate">{item.name || item.composite?.name || "Untitled"}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {!isSingleSession && (
               <div className="mb-8 border border-white/10 bg-gradient-to-br from-white/5 via-black/50 to-black/80 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
                 <div className="flex items-center justify-between mb-4">

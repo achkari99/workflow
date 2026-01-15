@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -11,13 +11,22 @@ import { Loader2, ShieldCheck, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function AuthPage() {
-    const { user, loginMutation, registerMutation } = useAuth();
+    const { user, isLoading, loginMutation, registerMutation } = useAuth();
     const [, setLocation] = useLocation();
     const [activeTab, setActiveTab] = useState<"login" | "register">("login");
 
-    if (user) {
-        setLocation("/");
-        return null;
+    useEffect(() => {
+        if (user) {
+            setLocation("/");
+        }
+    }, [user, setLocation]);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#070909] text-white">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+        );
     }
 
     const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {

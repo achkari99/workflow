@@ -58,7 +58,7 @@ export default function AudioFooter() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
-  const [isFooterHidden, setIsFooterHidden] = useState(false);
+  const [isFooterHidden, setIsFooterHidden] = useState(true);
   const [album, setAlbum] = useState("");
   const [title, setTitle] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -253,8 +253,8 @@ export default function AudioFooter() {
       {!isFooterHidden && (
       <div className="relative border-t border-white/10 bg-gradient-to-r from-black via-zinc-950 to-black px-4 pt-3 pb-4">
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,_rgba(14,165,233,0.18),_transparent_55%)]" />
-        <div className="relative flex items-center gap-4">
-          <div className="flex items-center gap-3">
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-center">
+          <div className="flex items-center gap-3 w-full md:w-auto">
             <div className="h-10 w-10 rounded-md border border-white/10 bg-white/5 flex items-center justify-center">
               <Music2 className="w-5 h-5 text-primary" />
             </div>
@@ -272,7 +272,7 @@ export default function AudioFooter() {
                 />
               ))}
             </div>
-            <div className="min-w-[160px] max-w-[220px]">
+            <div className="min-w-0 w-full md:w-auto md:min-w-[160px] md:max-w-[220px]">
               <p className="text-xs text-white/40 font-mono uppercase tracking-widest">Now Playing</p>
               <p className="text-sm text-white truncate">{currentTrack?.title || "No track selected"}</p>
               <p className="text-[10px] text-white/30 uppercase tracking-widest truncate">
@@ -281,7 +281,7 @@ export default function AudioFooter() {
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col gap-2">
+          <div className="flex-1 flex flex-col gap-2 w-full">
             <div className="flex items-center justify-center gap-4">
               <Button
                 variant="ghost"
@@ -331,7 +331,7 @@ export default function AudioFooter() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-row items-center justify-between gap-2 w-full md:w-auto">
             <div className="hidden md:flex items-center gap-2">
               <Volume2 className="w-4 h-4 text-white/40" />
               <input
@@ -348,7 +348,7 @@ export default function AudioFooter() {
               variant="ghost"
               size="sm"
               onClick={() => setIsFooterHidden((prev) => !prev)}
-              className="text-white/60 hover:text-white"
+              className="text-white/60 hover:text-white md:w-auto justify-center"
             >
               <ChevronDown className="w-4 h-4 mr-1" />
               Hide Player
@@ -357,7 +357,7 @@ export default function AudioFooter() {
               variant="ghost"
               size="sm"
               onClick={() => setIsOpen((prev) => !prev)}
-              className="text-white/60 hover:text-white"
+              className="text-white/60 hover:text-white md:w-auto justify-center"
             >
               {isOpen ? <ChevronDown className="w-4 h-4 mr-1" /> : <ChevronUp className="w-4 h-4 mr-1" />}
               Library

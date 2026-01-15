@@ -36,6 +36,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { MobileHeaderMenu } from "@/components/ui/mobile-header-menu";
 import type {
   CompositeWorkflowWithItems,
   CompositeWorkflowSessionMember,
@@ -235,7 +237,7 @@ export default function CompositeSessionPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [wsStatus, setWsStatus] = useState<"idle" | "connecting" | "open" | "closed" | "error">("idle");
   const [lastWsEvent, setLastWsEvent] = useState<string>("");
-  const [activeCenterView, setActiveCenterView] = useState<"chat" | "submission">("chat");
+  const [activeCenterView, setActiveCenterView] = useState<"chat" | "submission">("submission");
   const [proofContent, setProofContent] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [isEditingProof, setIsEditingProof] = useState(false);
@@ -379,6 +381,14 @@ export default function CompositeSessionPage() {
   const emojiPickerRef = useRef<HTMLElement | null>(null);
   const emojiPickerContainerRef = useRef<HTMLDivElement | null>(null);
   const selectedAssignments = selectedStepId ? assignmentsByStep.get(selectedStepId) || [] : [];
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  const handleSelectStep = (stepId: number) => {
+    setSelectedStepId(stepId);
+    requestAnimationFrame(() => {
+      contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
   const visibleIntelDocs = useMemo(
     () => (session?.intelDocs || []).filter((doc) => doc.stepId === selectedStepId),
     [session?.intelDocs, selectedStepId]
@@ -653,7 +663,7 @@ export default function CompositeSessionPage() {
 
   return (
     <div className="min-h-screen bg-black text-foreground flex flex-col">
-      <header className="h-16 border-b border-white/5 bg-black/60 flex items-center justify-between px-6">
+      <header className="h-16 border-b border-white/5 bg-black/60 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -672,7 +682,85 @@ export default function CompositeSessionPage() {
             <div className="text-white font-display text-sm">{session.name || session.composite.name}</div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="lg:hidden">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-white/60 hover:text-white">
+                Phases
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="bg-black/95 border-white/10 p-0 w-[85vw] max-w-xs">
+              <div className="border-b border-white/5 p-4">
+                <h2 className="text-xs font-mono text-white/40 uppercase tracking-widest">Task Lanes</h2>
+              </div>
+              <div className="p-4 space-y-6">
+                {session.members.map((member) => {
+                  const assigned = new Set((assignmentsByUser.get(member.userId) || []).map((a) => a.stepId));
+                  const laneSteps = compositeSteps.filter((step) => assigned.has(step.id));
+                  const nextStepId = laneNextStep.get(member.userId);
+
+                  return (
+                    <div key={member.id} className="border border-white/5 bg-white/5">
+                      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5">
+                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: member.laneColor }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-mono text-white/70 truncate">{getDisplayName(member)}</p>
+                          <p className="text-[10px] text-white/30 uppercase tracking-widest">
+                            {member.allowLaneDelegation ? "Open Lane" : "Private Lane"}
+                          </p>
+                        </div>
+                        {member.allowLaneDelegation && <Shield className="w-3 h-3 text-primary" />}
+                      </div>
+                      <div className="p-3 space-y-2">
+                        {laneSteps.length === 0 ? (
+                          <p className="text-[11px] text-white/30 font-mono">No tasks assigned</p>
+                        ) : (
+                          laneSteps.map((step, index) => {
+                            const state = sessionStepsByStepId.get(step.id);
+                            const isDone = !!state?.isCompleted;
+                            const isActive = step.id === nextStepId && !isDone;
+                            const isAccessible = accessibleStepIds.has(step.id);
+                            const isSelected = step.id === selectedStepId;
+                            const stepCompletedBy = state?.completedByUserId
+                              ? session?.members.find((member) => member.userId === state.completedByUserId) || null
+                              : null;
+                            return (
+                              <button
+                                key={step.id}
+                                onClick={() => {
+                                  if (!isAccessible) return;
+                                  handleSelectStep(step.id);
+                                }}
+                                className={`w-full text-left px-3 py-2 border text-xs transition-all ${
+                                  isSelected
+                                    ? "border-primary/80 bg-primary/20 text-white"
+                                    : isActive
+                                      ? "border-primary/60 bg-primary/10 text-white"
+                                      : isDone
+                                        ? "border-white/10 bg-white/5 text-white/40 line-through"
+                                        : "border-white/10 text-white/60 hover:border-white/30"
+                                  } ${!isAccessible ? "cursor-not-allowed opacity-40" : ""}`}
+                              >
+                                Phase {index + 1}: {step.name}
+                                {isDone && stepCompletedBy && (
+                                  <span className="mt-1 flex items-center gap-2 text-[10px] text-white/40">
+                                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: stepCompletedBy.laneColor }} />
+                                    {getDisplayName(stepCompletedBy)}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+        <div className="hidden md:flex items-center gap-2">
           <button
             onClick={() => setActiveCenterView("chat")}
             className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest border ${activeCenterView === "chat" ? "border-primary/60 text-primary bg-primary/10" : "border-white/10 text-white/40 hover:text-white"
@@ -688,7 +776,7 @@ export default function CompositeSessionPage() {
             Submission
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-2">
           {session.members.map((member) => (
             <div key={member.id} className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: member.laneColor }} />
@@ -706,10 +794,50 @@ export default function CompositeSessionPage() {
             Manage
           </Button>
         </div>
+        <MobileHeaderMenu title="Session">
+          <div className="text-xs font-mono uppercase tracking-widest text-white/40">View</div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveCenterView("chat")}
+            className={`justify-start ${
+              activeCenterView === "chat" ? "text-primary bg-primary/10" : "text-white/70 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            Chat
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveCenterView("submission")}
+            className={`justify-start ${
+              activeCenterView === "submission" ? "text-primary bg-primary/10" : "text-white/70 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            Submission
+          </Button>
+          <div className="mt-2 text-xs font-mono uppercase tracking-widest text-white/40">Members</div>
+          <div className="space-y-2">
+            {session.members.map((member) => (
+              <div key={member.id} className="flex items-center gap-2 text-xs text-white/60">
+                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: member.laneColor }} />
+                <span className="uppercase font-mono">{getDisplayName(member)}</span>
+              </div>
+            ))}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/sessions/${session.id}/manage`)}
+            className="mt-2 justify-start text-white/70 hover:text-white hover:bg-white/10"
+          >
+            Manage
+          </Button>
+        </MobileHeaderMenu>
       </header>
 
-      <div className="flex-1 grid grid-cols-[300px_1fr_340px]">
-        <aside className="border-r border-white/5 bg-black/60 overflow-y-auto">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[300px_1fr_340px]">
+        <aside className="hidden lg:block border-r border-white/5 bg-black/60 overflow-y-auto">
           <div className="p-6 border-b border-white/5">
             <h2 className="text-xs font-mono text-white/40 uppercase tracking-widest">Task Lanes</h2>
           </div>
@@ -749,7 +877,7 @@ export default function CompositeSessionPage() {
                             key={step.id}
                             onClick={() => {
                               if (!isAccessible) return;
-                              setSelectedStepId(step.id);
+                              handleSelectStep(step.id);
                             }}
                             className={`w-full text-left px-3 py-2 border text-xs transition-all ${
                               isSelected
@@ -779,7 +907,10 @@ export default function CompositeSessionPage() {
           </div>
         </aside>
 
-        <main className="bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-white/[0.03] to-transparent overflow-y-auto">
+        <main
+          className="bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-white/[0.03] to-transparent overflow-y-auto"
+          ref={contentRef}
+        >
           <div className="px-6 py-4 border-b border-white/5">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">

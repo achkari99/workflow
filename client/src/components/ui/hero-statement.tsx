@@ -15,17 +15,17 @@ export function HeroStatement() {
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.7, ease: "easeOut" }}
-        className="mb-10"
+        className="mb-8 sm:mb-10"
       >
         <img
           src="/coWorkflow_logo1.png"
           alt="coWorkflow"
-          className="h-32 md:h-40 lg:h-48 w-auto"
+          className="h-24 sm:h-32 md:h-40 lg:h-48 w-auto"
         />
       </motion.div>
 
       {/* Text beneath logo */}
-      <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-black tracking-tighter leading-[0.85] text-white text-center md:text-left">
+      <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-display font-black tracking-tighter leading-[0.95] sm:leading-[0.9] text-white text-center md:text-left">
         {/* BUILD on first line */}
         <motion.span
           initial={{ opacity: 0, y: 20 }}
@@ -50,7 +50,7 @@ export function HeroStatement() {
               duration: 0.5,
               ease: "easeOut",
             }}
-            className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/50 mr-4"
+            className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/50 mr-2 sm:mr-4"
           >
             {words[1]}
           </motion.span>
@@ -73,7 +73,7 @@ export function HeroStatement() {
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.7, duration: 0.5, ease: "easeOut" }}
-        className="mt-6 flex gap-4"
+        className="mt-4 sm:mt-6 flex gap-3 sm:gap-4"
       >
         <motion.div
           initial={{ height: 0 }}
@@ -81,7 +81,7 @@ export function HeroStatement() {
           transition={{ delay: 0.6, duration: 0.4, ease: "easeOut" }}
           className="w-0.5 bg-primary/50 self-stretch"
         />
-        <p className="text-lg md:text-xl text-muted-foreground max-w-md font-mono">
+        <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-md font-mono">
           <motion.span
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

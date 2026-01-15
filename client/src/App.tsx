@@ -17,6 +17,7 @@ import SessionsHub from "@/pages/sessions-hub";
 import WorkflowControl from "@/pages/workflow-control";
 import CompositeControl from "@/pages/composite-control";
 import NotesPage from "@/pages/notes";
+import DailyPage from "@/pages/daily";
 import AudioFooter from "@/components/audio-footer";
 import AuthPage from "@/pages/auth-page";
 import ProfilePage from "@/pages/profile";
@@ -68,6 +69,9 @@ function Router() {
       </Route>
       <Route path="/notes">
         {(params) => <ProtectedRoute component={NotesPage} path="/notes" {...params} />}
+      </Route>
+      <Route path="/daily">
+        {(params) => <ProtectedRoute component={DailyPage} path="/daily" {...params} />}
       </Route>
       <Route path="/intel/:workflowId/:stepId?">
         {(params) => <ProtectedRoute component={IntelPage} path="/intel/:workflowId/:stepId?" {...params} />}

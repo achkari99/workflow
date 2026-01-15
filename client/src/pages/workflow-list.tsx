@@ -13,6 +13,7 @@ import {
   Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MobileHeaderMenu } from "@/components/ui/mobile-header-menu";
 import type { Workflow } from "@shared/schema";
 
 function WorkflowCard({ 
@@ -150,15 +151,28 @@ export default function WorkflowList() {
           <ChevronLeft className="w-4 h-4 mr-1" />
           Home
         </Button>
-        
-        <Button
-          onClick={() => navigate("/missions/new")}
-          className="bg-primary hover:bg-primary/90 text-black"
-          data-testid="button-new-workflow"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Mission
-        </Button>
+
+        <div className="flex items-center gap-2">
+          <div className="hidden md:flex">
+            <Button
+              onClick={() => navigate("/missions/new")}
+              className="bg-primary hover:bg-primary/90 text-black"
+              data-testid="button-new-workflow"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Mission
+            </Button>
+          </div>
+          <MobileHeaderMenu title="Missions">
+            <Button
+              onClick={() => navigate("/missions/new")}
+              className="justify-start bg-primary hover:bg-primary/90 text-black"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Mission
+            </Button>
+          </MobileHeaderMenu>
+        </div>
       </header>
 
       <div className="container mx-auto max-w-4xl py-12 px-4">
@@ -167,7 +181,7 @@ export default function WorkflowList() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-12"
         >
-          <h1 className="font-display text-4xl text-white tracking-wide">All Missions</h1>
+          <h1 className="font-display text-3xl sm:text-4xl text-white tracking-wide">All Missions</h1>
           <p className="text-white/40 mt-2">Manage and track all your missions</p>
         </motion.div>
 

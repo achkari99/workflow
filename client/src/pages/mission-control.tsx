@@ -5,10 +5,11 @@ import { AmbientBackground } from "@/components/ui/ambient-background";
 import bgTexture from "@assets/generated_images/subtle_dark_digital_noise_texture_with_faint_grid_overlay.png";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getActiveWorkflow, getWorkflows, advanceWorkflow } from "@/lib/api";
-import { Loader2, Plus, List, Layers, Users, LogIn, LogOut, User, StickyNote } from "lucide-react";
+import { Loader2, Plus, List, Layers, Users, LogIn, LogOut, User, StickyNote, ListChecks } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { MobileHeaderMenu } from "@/components/ui/mobile-header-menu";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function MissionControl() {
@@ -54,7 +55,7 @@ export default function MissionControl() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-hidden relative selection:bg-primary/30 selection:text-primary-foreground">
+    <div className="min-h-screen bg-background text-foreground overflow-x-hidden relative selection:bg-primary/30 selection:text-primary-foreground">
       {/* Ambient animated background */}
       <AmbientBackground />
 
@@ -72,14 +73,14 @@ export default function MissionControl() {
       <div className="fixed inset-0 bg-grid-pattern opacity-[0.03] pointer-events-none z-0" />
 
       {/* Main Layout */}
-      <div className="relative z-10 container mx-auto px-4 py-8 md:py-12 lg:py-16 min-h-screen flex flex-col">
+      <div className="relative z-10 container mx-auto px-4 sm:px-6 py-8 md:py-12 lg:py-16 min-h-screen flex flex-col">
 
         {/* Top Header / Status Bar */}
         <motion.header
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="flex justify-between items-center mb-12 md:mb-20 border-b border-white/5 pb-4"
+          className="flex flex-col gap-4 md:flex-row md:justify-between md:items-center mb-10 md:mb-20 border-b border-white/5 pb-4"
         >
           <div className="text-xs font-mono text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
             <motion.span
@@ -93,91 +94,195 @@ export default function MissionControl() {
             System Online
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/workflows")}
-              className="text-white/50 hover:text-white hover:bg-white/5"
-              data-testid="button-composites"
-            >
-              <Layers className="w-4 h-4 mr-2" />
-              Workflows
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/sessions")}
-              className="text-white/50 hover:text-white hover:bg-white/5"
-              data-testid="button-sessions"
-            >
-              <Users className="w-4 h-4 mr-2" />
-              Sessions
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/notes")}
-              className="text-white/50 hover:text-white hover:bg-white/5"
-              data-testid="button-notes"
-            >
-              <StickyNote className="w-4 h-4 mr-2" />
-              Notes
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/missions")}
-              className="text-white/50 hover:text-white hover:bg-white/5"
-              data-testid="button-all-missions"
-            >
-              <List className="w-4 h-4 mr-2" />
-              Missions
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => navigate("/missions/new")}
-              className="bg-primary/20 hover:bg-primary/30 text-primary"
-              data-testid="button-new-mission"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New
-            </Button>
-
-              {user ? (
-              <div className="flex items-center gap-2 ml-2 pl-2 border-l border-white/10">
-                <button
-                  type="button"
-                  onClick={() => navigate("/profile")}
-                  className="flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
-                  data-testid="button-profile"
-                >
-                  <User className="w-4 h-4" />
-                  <span>{user?.firstName || user?.username || user?.email || "User"}</span>
-                </button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => logoutMutation.mutate()}
-                  className="text-white/50 hover:text-white hover:bg-white/5"
-                  disabled={logoutMutation.isPending}
-                  data-testid="button-logout"
-                >
-                  <LogOut className="w-4 h-4" />
-                </Button>
-              </div>
-            ) : (
+          <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-3">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate("/auth")}
-                className="text-white/50 hover:text-white hover:bg-white/5 ml-2 pl-2 border-l border-white/10"
-                data-testid="button-login"
+                onClick={() => navigate("/workflows")}
+                className="text-white/50 hover:text-white hover:bg-white/5"
+                data-testid="button-composites"
               >
-                <LogIn className="w-4 h-4 mr-2" />
-                Log In
+                <Layers className="w-4 h-4 mr-2" />
+                Workflows
               </Button>
-            )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/sessions")}
+                className="text-white/50 hover:text-white hover:bg-white/5"
+                data-testid="button-sessions"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Sessions
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/notes")}
+                className="text-white/50 hover:text-white hover:bg-white/5"
+                data-testid="button-notes"
+              >
+                <StickyNote className="w-4 h-4 mr-2" />
+                Notes
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/daily")}
+                className="text-white/50 hover:text-white hover:bg-white/5"
+                data-testid="button-daily"
+              >
+                <ListChecks className="w-4 h-4 mr-2" />
+                Daily
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/missions")}
+                className="text-white/50 hover:text-white hover:bg-white/5"
+                data-testid="button-all-missions"
+              >
+                <List className="w-4 h-4 mr-2" />
+                Missions
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => navigate("/missions/new")}
+                className="bg-primary/20 hover:bg-primary/30 text-primary"
+                data-testid="button-new-mission"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New
+              </Button>
+
+              {user ? (
+                <div className="flex items-center gap-2 ml-2 pl-2 border-l border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/profile")}
+                    className="flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
+                    data-testid="button-profile"
+                  >
+                    <User className="w-4 h-4" />
+                    <span className="max-w-[140px] truncate">{user?.firstName || user?.username || user?.email || "User"}</span>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => logoutMutation.mutate()}
+                    className="text-white/50 hover:text-white hover:bg-white/5"
+                    disabled={logoutMutation.isPending}
+                    data-testid="button-logout"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate("/auth")}
+                  className="text-white/50 hover:text-white hover:bg-white/5 ml-2 pl-2 border-l border-white/10"
+                  data-testid="button-login"
+                >
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Log In
+                </Button>
+              )}
+            </div>
+
+            <MobileHeaderMenu title="Navigate">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/workflows")}
+                className="justify-start text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <Layers className="w-4 h-4 mr-2" />
+                Workflows
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/sessions")}
+                className="justify-start text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Sessions
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/notes")}
+                className="justify-start text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <StickyNote className="w-4 h-4 mr-2" />
+                Notes
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/daily")}
+                className="justify-start text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <ListChecks className="w-4 h-4 mr-2" />
+                Daily
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/missions")}
+                className="justify-start text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <List className="w-4 h-4 mr-2" />
+                Missions
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => navigate("/missions/new")}
+                className="justify-start bg-primary/20 hover:bg-primary/30 text-primary"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Mission
+              </Button>
+              {user ? (
+                <>
+                  <div className="mt-2 border-t border-white/10 pt-2 text-xs font-mono uppercase tracking-widest text-white/40">
+                    Account
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate("/profile")}
+                    className="justify-start text-white/70 hover:text-white hover:bg-white/10"
+                  >
+                    <User className="w-4 h-4 mr-2" />
+                    {user?.firstName || user?.username || user?.email || "User"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => logoutMutation.mutate()}
+                    className="justify-start text-white/70 hover:text-white hover:bg-white/10"
+                    disabled={logoutMutation.isPending}
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Log Out
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate("/auth")}
+                  className="justify-start text-white/70 hover:text-white hover:bg-white/10"
+                >
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Log In
+                </Button>
+              )}
+            </MobileHeaderMenu>
           </div>
         </motion.header>
 

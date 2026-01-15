@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { ChevronLeft, Loader2, Users, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MobileHeaderMenu } from "@/components/ui/mobile-header-menu";
 import { getCompositeSessions } from "@/lib/api";
 import type { CompositeWorkflowWithItems } from "@shared/schema";
 
@@ -36,14 +37,27 @@ export default function SessionsHub() {
           <ChevronLeft className="w-4 h-4 mr-1" />
           Home
         </Button>
-        <Button
-          onClick={() => navigate("/sessions/new")}
-          className="bg-primary hover:bg-primary/90 text-black"
-          data-testid="button-new-session"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Create Session
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="hidden md:flex">
+            <Button
+              onClick={() => navigate("/sessions/new")}
+              className="bg-primary hover:bg-primary/90 text-black"
+              data-testid="button-new-session"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Session
+            </Button>
+          </div>
+          <MobileHeaderMenu title="Sessions">
+            <Button
+              onClick={() => navigate("/sessions/new")}
+              className="justify-start bg-primary hover:bg-primary/90 text-black"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Session
+            </Button>
+          </MobileHeaderMenu>
+        </div>
       </header>
 
       <div className="container mx-auto max-w-5xl py-12 px-4">
@@ -52,7 +66,7 @@ export default function SessionsHub() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-10"
         >
-          <h1 className="font-display text-4xl text-white tracking-wide">Sessions</h1>
+          <h1 className="font-display text-3xl sm:text-4xl text-white tracking-wide">Sessions</h1>
           <p className="text-white/40 mt-2">Jump back into active collaborations or start a new one.</p>
         </motion.div>
 

@@ -7,6 +7,7 @@ import {
     workflowShares,
     notes,
     audioTracks,
+    dailyTasks,
     type Workflow,
     type InsertWorkflow,
     type Step,
@@ -21,6 +22,8 @@ import {
     type InsertNote,
     type AudioTrack,
     type InsertAudioTrack,
+    type DailyTask,
+    type InsertDailyTask,
     type WorkflowWithSteps,
     type StepWithDetails,
     type WorkflowShare,
@@ -328,6 +331,33 @@ export class WorkflowStorage {
 
     async deleteAudioTrack(id: number): Promise<boolean> {
         await db.delete(audioTracks).where(eq(audioTracks.id, id));
+        return true;
+    }
+
+    async getDailyTasksByUser(userId: string): Promise<DailyTask[]> {
+        return await db
+            .select()
+            .from(dailyTasks)
+            .where(eq(dailyTasks.userId, userId))
+            .orderBy(desc(dailyTasks.updatedAt));
+    }
+
+    async createDailyTask(task: InsertDailyTask): Promise<DailyTask> {
+        const [created] = await db.insert(dailyTasks).values(task).returning();
+        return created;
+    }
+
+    async updateDailyTask(id: number, task: Partial<InsertDailyTask>): Promise<DailyTask | undefined> {
+        const [updated] = await db
+            .update(dailyTasks)
+            .set({ ...task, updatedAt: new Date() })
+            .where(eq(dailyTasks.id, id))
+            .returning();
+        return updated || undefined;
+    }
+
+    async deleteDailyTask(id: number): Promise<boolean> {
+        await db.delete(dailyTasks).where(eq(dailyTasks.id, id));
         return true;
     }
 }

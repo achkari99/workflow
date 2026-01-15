@@ -10,7 +10,7 @@ export function useAuth() {
     queryKey: ["/api/user"],
     queryFn: async () => {
       try {
-        const res = await fetch("/api/user");
+        const res = await fetch("/api/user", { credentials: "include" });
         if (res.status === 401) return null;
         if (!res.ok) throw new Error("Failed to fetch user");
         return res.json();
@@ -73,4 +73,3 @@ export function useAuth() {
     logoutMutation,
   };
 }
-

@@ -24,6 +24,7 @@ import {
   Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MobileHeaderMenu } from "@/components/ui/mobile-header-menu";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Workflow, CompositeWorkflowWithItems, Step } from "@shared/schema";
@@ -586,14 +587,25 @@ export default function CompositesPage() {
         </Button>
 
         <div className="flex items-center gap-2">
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider text-xs"
-            data-testid="button-create-composite"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Combine Workflows
-          </Button>
+          <div className="hidden md:flex">
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider text-xs"
+              data-testid="button-create-composite"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Combine Workflows
+            </Button>
+          </div>
+          <MobileHeaderMenu title="Workflows">
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              className="justify-start bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider text-xs"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Combine Workflows
+            </Button>
+          </MobileHeaderMenu>
         </div>
       </header>
 
@@ -608,7 +620,7 @@ export default function CompositesPage() {
               <Layers className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h1 className="font-display text-4xl text-white tracking-tight">Workflows</h1>
+              <h1 className="font-display text-3xl sm:text-4xl text-white tracking-tight">Workflows</h1>
               <p className="text-white/40 mt-1 text-lg">Unified oversight for multiple mission threads</p>
             </div>
           </div>

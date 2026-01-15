@@ -19,6 +19,8 @@ import {
   type InsertNote,
   type AudioTrack,
   type InsertAudioTrack,
+  type DailyTask,
+  type InsertDailyTask,
   type CompositeWorkflowWithItems,
   type CompositeWorkflow,
   type InsertCompositeWorkflow,
@@ -90,6 +92,12 @@ export interface IStorage {
   createAudioTrack(track: InsertAudioTrack): Promise<AudioTrack>;
   updateAudioTrack(id: number, track: Partial<InsertAudioTrack>): Promise<AudioTrack | undefined>;
   deleteAudioTrack(id: number): Promise<boolean>;
+
+  // Daily tasks
+  getDailyTasksByUser(userId: string): Promise<DailyTask[]>;
+  createDailyTask(task: InsertDailyTask): Promise<DailyTask>;
+  updateDailyTask(id: number, task: Partial<InsertDailyTask>): Promise<DailyTask | undefined>;
+  deleteDailyTask(id: number): Promise<boolean>;
 
   // Sharing
   getWorkflowShares(workflowId: number): Promise<WorkflowShare[]>;

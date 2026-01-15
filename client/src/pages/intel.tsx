@@ -14,6 +14,7 @@ import {
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MobileHeaderMenu } from "@/components/ui/mobile-header-menu";
 import { useState, useId } from "react";
 import type { IntelDoc, Step } from "@shared/schema";
 
@@ -319,14 +320,27 @@ export default function IntelPage() {
         </Button>
 
         {selectedStepId && (
-          <Button
-            onClick={() => setShowAddModal(true)}
-            className="bg-primary/20 hover:bg-primary/30 text-primary"
-            data-testid="button-add-doc"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Document
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="hidden md:flex">
+              <Button
+                onClick={() => setShowAddModal(true)}
+                className="bg-primary/20 hover:bg-primary/30 text-primary"
+                data-testid="button-add-doc"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Document
+              </Button>
+            </div>
+            <MobileHeaderMenu title="Intel">
+              <Button
+                onClick={() => setShowAddModal(true)}
+                className="justify-start bg-primary/20 hover:bg-primary/30 text-primary"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Document
+              </Button>
+            </MobileHeaderMenu>
+          </div>
         )}
       </header>
 
@@ -341,7 +355,7 @@ export default function IntelPage() {
               <BookOpen className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h1 className="font-display text-3xl text-white tracking-wide">Intel Center</h1>
+              <h1 className="font-display text-2xl sm:text-3xl text-white tracking-wide">Intel Center</h1>
               <p className="text-white/40 mt-1">{intelTitle}</p>
             </div>
           </div>

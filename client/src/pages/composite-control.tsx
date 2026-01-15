@@ -100,7 +100,7 @@ export default function CompositeControl() {
         <div className="text-white/30 text-xs">{composite?.steps?.length || 0} phases</div>
       </header>
 
-      <div className="grid grid-cols-[260px_1fr] min-h-[calc(100vh-56px)]">
+      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] min-h-[calc(100vh-56px)]">
         <aside className="border-r border-white/5 bg-black/60 p-4">
           <h2 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-4">Phases</h2>
           {isLoading ? (

@@ -101,7 +101,7 @@ export function MissionCard({
             </span>
           </motion.div>
 
-          <CardTitle className="text-4xl md:text-5xl font-display font-bold uppercase tracking-tight text-white leading-none">
+          <CardTitle className="text-2xl sm:text-3xl md:text-5xl font-display font-bold uppercase tracking-tight text-white leading-tight sm:leading-none">
             <AnimatePresence mode="wait">
               <motion.span
                 key={questName}
@@ -118,7 +118,7 @@ export function MissionCard({
 
         <CardContent className="space-y-8 pt-6">
           <div className="space-y-4">
-            <div className="flex justify-between items-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-end">
               <div>
                 <p className="text-sm text-muted-foreground font-mono mb-1 uppercase tracking-widest">Current Objective</p>
                 <AnimatePresence mode="wait">
@@ -128,7 +128,7 @@ export function MissionCard({
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 10 }}
                     transition={{ duration: 0.25 }}
-                    className="text-2xl font-sans font-medium text-white flex items-center gap-2"
+                    className="text-lg sm:text-2xl font-sans font-medium text-white flex items-center gap-2"
                   >
                     <span className="text-primary">{stepName}</span>
                   </motion.h3>
