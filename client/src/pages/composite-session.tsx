@@ -95,17 +95,18 @@ export default function CompositeSessionPage() {
     queryKey: ["composite-session", sessionId],
     queryFn: () => getCompositeSession(sessionId),
     enabled: !!sessionId,
-    refetchInterval: 2000,
-    refetchIntervalInBackground: true,
-    refetchOnWindowFocus: true,
   });
 
   const { data: messages, isLoading: messagesLoading } = useQuery<SessionChatMessage[]>({
     queryKey: ["composite-session-messages", sessionId],
     queryFn: () => getCompositeSessionMessages(sessionId),
     enabled: !!sessionId,
-    refetchOnWindowFocus: true,
   });
+
+  const sessionMembersRef = useRef<CompositeSessionPayload["members"]>([]);
+  useEffect(() => {
+    sessionMembersRef.current = session?.members || [];
+  }, [session?.members]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -169,7 +170,7 @@ export default function CompositeSessionPage() {
             return;
           }
           if (payload?.type === "session:chat_read" && Array.isArray(payload.messageIds)) {
-            const reader = session?.members.find((member) => member.userId === payload.userId)?.user || null;
+            const reader = sessionMembersRef.current.find((member) => member.userId === payload.userId)?.user || null;
             queryClient.setQueryData(
               ["composite-session-messages", sessionId],
               (data: SessionChatMessage[] | undefined) => {
@@ -223,7 +224,7 @@ export default function CompositeSessionPage() {
     return () => {
       ws.close();
     };
-  }, [sessionId, queryClient, session?.members]);
+  }, [sessionId, queryClient, user?.id]);
 
   const [selectedStepId, setSelectedStepId] = useState<number | null>(null);
   const [isAddingDoc, setIsAddingDoc] = useState(false);
