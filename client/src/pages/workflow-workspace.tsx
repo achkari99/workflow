@@ -947,6 +947,15 @@ export default function WorkflowWorkspace() {
           />
         </motion.div>
 
+        <motion.div
+          initial={{ x: 50, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ delay: 0.15 }}
+          className="hidden lg:block w-80 shrink-0"
+        >
+          {intelPanel}
+        </motion.div>
+
       </div>
       <div className="lg:hidden">
         <Sheet>

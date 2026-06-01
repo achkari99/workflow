@@ -1,114 +1,207 @@
+import { existsSync, readFileSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
+import pg from "pg";
+
 /**
  * Keep-Alive Script for Render Free Tier
  *
- * Pings the /ping endpoint to prevent service from pausing.
+ * Pings the /ping endpoint to prevent the service from idling.
  *
  * Usage:
- *   node scripts/keep-alive.js
+ *   npm run keep-alive
+ *   npm run keep-alive -- --once
  *
- * Or with custom URL:
- *   SERVICE_URL=https://workflow-fhrw.onrender.com node scripts/keep-alive.js
- *
- * Note: This script should run on an external service (like UptimeRobot)
- * or on a separate server. It will not work if your Render service is paused.
+ * Optional env vars:
+ *   SERVICE_URL=https://your-service.onrender.com
+ *   RENDER_SERVICE_URL=https://your-service.onrender.com
+ *   DATABASE_URL=postgresql://postgres...
+ *   KEEP_ALIVE_ENDPOINT=/ping
+ *   PING_INTERVAL_MINUTES=5
  */
 
-require("dotenv").config();
+loadDotEnv();
 
-const https = require("https");
-const http = require("http");
-
-const SERVICE_URL =
+const SERVICE_URL = stripTrailingSlash(
   process.env.SERVICE_URL ||
-  process.env.RENDER_SERVICE_URL ||
-  "https://workflow-fhrw.onrender.com";
-const INTERVAL_MINUTES = parseInt(process.env.PING_INTERVAL_MINUTES || "5", 10);
-const ENDPOINT = process.env.KEEP_ALIVE_ENDPOINT || "/ping";
+    process.env.RENDER_SERVICE_URL ||
+    "https://workflow-fhrw.onrender.com",
+);
+const ENDPOINT = ensureLeadingSlash(process.env.KEEP_ALIVE_ENDPOINT || "/ping");
+const INTERVAL_MINUTES = Number.parseInt(process.env.PING_INTERVAL_MINUTES || "5", 10);
+const RUN_ONCE = process.argv.includes("--once");
+const DATABASE_URL = process.env.DATABASE_URL;
+const { Pool } = pg;
+const dbPool = DATABASE_URL
+  ? new Pool({
+      connectionString: DATABASE_URL,
+      max: 1,
+      idleTimeoutMillis: 5_000,
+      connectionTimeoutMillis: 10_000,
+    })
+  : null;
 
-function ping() {
-  const url = new URL(`${SERVICE_URL}${ENDPOINT}`);
-  const protocol = url.protocol === "https:" ? https : http;
-
-  const options = {
-    hostname: url.hostname,
-    port: url.port || (url.protocol === "https:" ? 443 : 80),
-    path: url.pathname,
-    method: "GET",
-    timeout: 10000,
-  };
-
-  const req = protocol.request(options, (res) => {
-    let data = "";
-
-    res.on("data", (chunk) => {
-      data += chunk;
-    });
-
-    res.on("end", () => {
-      const timestamp = new Date().toISOString();
-      try {
-        const response = JSON.parse(data);
-        if (res.statusCode === 200 && response.status === "ok") {
-          console.log(`OK [${timestamp}] Ping successful - Service is alive`);
-          if (response.database) {
-            console.log(`   Database: ${response.database}`);
-          }
-        } else {
-          console.warn(
-            `WARN [${timestamp}] Ping returned non-ok status (${res.statusCode}):`,
-            response
-          );
-        }
-      } catch (err) {
-        if (res.statusCode === 200) {
-          console.log(`OK [${timestamp}] Ping successful (non-JSON response)`);
-        } else {
-          console.warn(
-            `WARN [${timestamp}] Ping response not JSON (status ${res.statusCode}):`,
-            data.substring(0, 100)
-          );
-        }
-      }
-    });
-  });
-
-  req.on("error", (err) => {
-    const timestamp = new Date().toISOString();
-    console.error(`ERR [${timestamp}] Ping failed:`, err.message);
-    console.error(`   Error code: ${err.code || "N/A"}`);
-    if (err.code === "ECONNREFUSED" || err.code === "ETIMEDOUT") {
-      console.error("   Service might be paused. Check Render dashboard.");
-    }
-  });
-
-  req.on("timeout", () => {
-    const timestamp = new Date().toISOString();
-    console.error(`ERR [${timestamp}] Ping timeout after 10 seconds`);
-    console.error("   Service might be paused or slow. Check Render dashboard.");
-    req.destroy();
-  });
-
-  req.end();
+if (!Number.isFinite(INTERVAL_MINUTES) || INTERVAL_MINUTES <= 0) {
+  throw new Error("PING_INTERVAL_MINUTES must be a positive number");
 }
 
-console.log(`Keep-alive started for: ${SERVICE_URL}`);
-console.log(`Endpoint: ${ENDPOINT}`);
-console.log(`Interval: ${INTERVAL_MINUTES} minutes (Render pauses after 15 min)`);
-console.log("First ping in 5 seconds...\n");
+const targetUrl = new URL(`${SERVICE_URL}${ENDPOINT}`);
 
-setTimeout(() => {
-  ping();
-}, 5000);
+async function pingAll() {
+  const webOk = await pingWebService();
+  const dbOk = await pingDatabase();
+  return webOk && dbOk;
+}
 
-const intervalMs = INTERVAL_MINUTES * 60 * 1000;
-setInterval(ping, intervalMs);
+async function pingWebService() {
+  const timestamp = new Date().toISOString();
+
+  try {
+    const response = await request(targetUrl);
+    const body = response.body;
+
+    let parsedBody = null;
+    try {
+      parsedBody = JSON.parse(body);
+    } catch {
+      // Plain text responses are fine as long as the status is healthy.
+    }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      console.log(`OK [${timestamp}] Web ping successful (${response.statusCode})`);
+      if (parsedBody) {
+        console.log(`   Response: ${JSON.stringify(parsedBody)}`);
+      }
+      return true;
+    }
+
+    console.warn(`WARN [${timestamp}] Web ping returned ${response.statusCode}`);
+    console.warn(`   Body: ${body.slice(0, 200)}`);
+    return false;
+  } catch (error) {
+    console.error(`ERR [${timestamp}] Web ping failed: ${error.message}`);
+    return false;
+  }
+}
+
+async function pingDatabase() {
+  const timestamp = new Date().toISOString();
+
+  if (!dbPool) {
+    console.log(`SKIP [${timestamp}] Database ping skipped: DATABASE_URL is not set`);
+    return true;
+  }
+
+  try {
+    await dbPool.query("select 1");
+    console.log(`OK [${timestamp}] Supabase database ping successful`);
+    return true;
+  } catch (error) {
+    console.error(`ERR [${timestamp}] Supabase database ping failed: ${error.message}`);
+    if (error.code) {
+      console.error(`   Code: ${error.code}`);
+    }
+    return false;
+  }
+}
+
+function request(url) {
+  const transport = url.protocol === "https:" ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const req = transport.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === "https:" ? 443 : 80),
+        path: `${url.pathname}${url.search}`,
+        method: "GET",
+        timeout: 10_000,
+      },
+      (res) => {
+        let body = "";
+
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () => {
+          resolve({
+            statusCode: res.statusCode || 0,
+            body,
+          });
+        });
+      },
+    );
+
+    req.on("timeout", () => {
+      req.destroy(new Error("request timed out after 10 seconds"));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+function loadDotEnv() {
+  if (!existsSync(".env")) {
+    return;
+  }
+
+  const lines = readFileSync(".env", "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    const rawValue = trimmed.slice(separatorIndex + 1).trim();
+    const value = rawValue.replace(/^["']|["']$/g, "");
+
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+function stripTrailingSlash(value) {
+  return value.replace(/\/+$/, "");
+}
+
+function ensureLeadingSlash(value) {
+  return value.startsWith("/") ? value : `/${value}`;
+}
+
+console.log(`Keep-alive target: ${targetUrl.toString()}`);
+
+if (RUN_ONCE) {
+  const ok = await pingAll();
+  await closeDatabasePool();
+  process.exit(ok ? 0 : 1);
+}
+
+console.log(`Interval: ${INTERVAL_MINUTES} minute(s)`);
+console.log("First ping starts now.\n");
+
+await pingAll();
+setInterval(pingAll, INTERVAL_MINUTES * 60 * 1000);
+
+async function closeDatabasePool() {
+  if (dbPool) {
+    await dbPool.end();
+  }
+}
 
 process.on("SIGINT", () => {
   console.log("\nKeep-alive stopped");
-  process.exit(0);
+  closeDatabasePool().finally(() => process.exit(0));
 });
 
 process.on("SIGTERM", () => {
   console.log("\nKeep-alive stopped");
-  process.exit(0);
+  closeDatabasePool().finally(() => process.exit(0));
 });

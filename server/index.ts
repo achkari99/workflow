@@ -5,6 +5,7 @@ import { createServer } from "http";
 import { setupAuth } from "./auth";
 import { setupRealtime } from "./realtime";
 import { pool } from "./db";
+import { startProductionKeepAlive } from "./keepAlive";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -93,6 +94,13 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+      if (process.env.NODE_ENV === "production") {
+        startProductionKeepAlive({
+          serviceUrl: process.env.SERVICE_URL || process.env.RENDER_SERVICE_URL,
+          endpoint: process.env.KEEP_ALIVE_ENDPOINT,
+          intervalMinutes: Number.parseInt(process.env.PING_INTERVAL_MINUTES || "5", 10),
+        });
+      }
     },
   );
 })();
