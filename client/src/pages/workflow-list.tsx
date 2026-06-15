@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MobileHeaderMenu } from "@/components/ui/mobile-header-menu";
-import type { Workflow } from "@shared/schema";
+import type { WorkflowWithSteps } from "@shared/schema";
 
 function WorkflowCard({ 
   workflow, 
@@ -23,13 +23,15 @@ function WorkflowCard({
   onDelete,
   isActivating 
 }: { 
-  workflow: Workflow;
+  workflow: WorkflowWithSteps;
   onActivate: () => void;
   onOpen: () => void;
   onDelete: () => void;
   isActivating: boolean;
 }) {
-  const progress = (workflow.currentStep / workflow.totalSteps) * 100;
+  const totalSteps = workflow.steps?.length || workflow.totalSteps || 0;
+  const completedSteps = workflow.steps?.filter((step) => step.isCompleted || step.status === "completed").length || 0;
+  const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
   
   const priorityColors: Record<string, string> = {
     critical: "bg-red-500/20 text-red-400 border-red-500/30",
@@ -64,7 +66,7 @@ function WorkflowCard({
       <div className="mb-4">
         <div className="flex items-center justify-between text-xs text-white/40 mb-2">
           <span>Progress</span>
-          <span>{workflow.currentStep} of {workflow.totalSteps} steps</span>
+          <span>{completedSteps} of {totalSteps} steps</span>
         </div>
         <div className="h-1 bg-white/10">
           <motion.div 
@@ -135,8 +137,14 @@ export default function WorkflowList() {
     },
   });
 
-  const activeWorkflows = workflows?.filter(w => w.status === "active") || [];
-  const completedWorkflows = workflows?.filter(w => w.currentStep >= w.totalSteps) || [];
+  const isWorkflowCompleted = (workflow: WorkflowWithSteps) => {
+    const totalSteps = workflow.steps?.length || workflow.totalSteps || 0;
+    if (totalSteps === 0) return false;
+    const completedSteps = workflow.steps?.filter((step) => step.isCompleted || step.status === "completed").length || 0;
+    return completedSteps >= totalSteps;
+  };
+  const activeWorkflows = workflows?.filter((workflow) => workflow.status === "active" && !isWorkflowCompleted(workflow)) || [];
+  const completedWorkflows = workflows?.filter(isWorkflowCompleted) || [];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
