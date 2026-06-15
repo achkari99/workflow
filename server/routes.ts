@@ -8,6 +8,7 @@ import { registerRootRoutes } from "./routes/root";
 import { registerNoteRoutes } from "./routes/notes";
 import { registerAudioRoutes } from "./routes/audio";
 import { registerDailyRoutes } from "./routes/daily";
+import { registerAnalyticsRoutes } from "./routes/analytics";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication first
@@ -21,6 +22,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerNoteRoutes(app);
   registerAudioRoutes(app);
   registerDailyRoutes(app);
+  registerAnalyticsRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

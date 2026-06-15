@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, timestamp, boolean, date, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -227,6 +227,17 @@ export const dailyTasks = pgTable("daily_tasks", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const workingHourEntries = pgTable("working_hour_entries", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  workDate: date("work_date").notNull(),
+  minutes: integer("minutes").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  userDateIdx: uniqueIndex("working_hour_entries_user_date_idx").on(table.userId, table.workDate),
+}));
+
 export const notes = pgTable("notes", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -285,6 +296,13 @@ export const dailyTaskRelations = relations(dailyTasks, ({ one }) => ({
   }),
 }));
 
+export const workingHourEntryRelations = relations(workingHourEntries, ({ one }) => ({
+  user: one(users, {
+    fields: [workingHourEntries.userId],
+    references: [users.id],
+  }),
+}));
+
 export const noteRelations = relations(notes, ({ one }) => ({
   user: one(users, {
     fields: [notes.userId],
@@ -327,6 +345,12 @@ export const insertAudioTrackSchema = createInsertSchema(audioTracks).omit({
 });
 
 export const insertDailyTaskSchema = createInsertSchema(dailyTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertWorkingHourEntrySchema = createInsertSchema(workingHourEntries).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -416,6 +440,8 @@ export type InsertAudioTrack = z.infer<typeof insertAudioTrackSchema>;
 export type AudioTrack = typeof audioTracks.$inferSelect;
 export type InsertDailyTask = z.infer<typeof insertDailyTaskSchema>;
 export type DailyTask = typeof dailyTasks.$inferSelect;
+export type InsertWorkingHourEntry = z.infer<typeof insertWorkingHourEntrySchema>;
+export type WorkingHourEntry = typeof workingHourEntries.$inferSelect;
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Note = typeof notes.$inferSelect;
 export type InsertWorkflowShare = z.infer<typeof insertWorkflowShareSchema>;

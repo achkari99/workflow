@@ -1,9 +1,15 @@
 import type { Express } from "express";
+import { pool } from "../db";
 import { storage } from "../storage";
 
 export function registerRootRoutes(app: Express) {
-    app.get("/ping", (_req, res) => {
-        res.json({ status: "ok" });
+    app.get("/ping", async (_req, res) => {
+        try {
+            await pool.query("select 1");
+            res.json({ status: "ok", database: "ok" });
+        } catch (error) {
+            res.status(503).json({ status: "error", database: "unavailable" });
+        }
     });
 
     app.post("/api/seed", async (req, res) => {

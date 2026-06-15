@@ -1,15 +1,42 @@
 import { motion } from "framer-motion";
 import { useLocation, useParams } from "wouter";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
-import { getUserProfile, updateUserProfile } from "@/lib/api";
+import { getUserProfile, getWorkingHours, type WorkingHoursPoint, type WorkingHoursRange, updateUserProfile } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronLeft, PenSquare, Sparkles, ShieldCheck, Zap } from "lucide-react";
+
+const emptyWorkingHoursData: Record<WorkingHoursRange, WorkingHoursPoint[]> = {
+  Day: [
+    { label: "Mon", date: "No data", hours: 0 },
+    { label: "Tue", date: "No data", hours: 0 },
+    { label: "Wed", date: "No data", hours: 0 },
+    { label: "Thu", date: "No data", hours: 0 },
+    { label: "Fri", date: "No data", hours: 0 },
+    { label: "Sat", date: "No data", hours: 0 },
+    { label: "Sun", date: "No data", hours: 0 },
+  ],
+  Week: [
+    { label: "Week 1", date: "No data", hours: 0 },
+    { label: "Week 2", date: "No data", hours: 0 },
+    { label: "Week 3", date: "No data", hours: 0 },
+    { label: "Week 4", date: "No data", hours: 0 },
+  ],
+  Month: [
+    { label: "M1", date: "No data", hours: 0 },
+    { label: "M2", date: "No data", hours: 0 },
+    { label: "M3", date: "No data", hours: 0 },
+    { label: "M4", date: "No data", hours: 0 },
+    { label: "M5", date: "No data", hours: 0 },
+    { label: "M6", date: "No data", hours: 0 },
+  ],
+};
 
 export default function ProfilePage() {
   const [, navigate] = useLocation();
@@ -17,6 +44,7 @@ export default function ProfilePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [workingHoursRange, setWorkingHoursRange] = useState<WorkingHoursRange>("Day");
   const [profileForm, setProfileForm] = useState({
     firstName: "",
     lastName: "",
@@ -37,6 +65,12 @@ export default function ProfilePage() {
     queryKey: ["profile", profileId],
     queryFn: () => getUserProfile(profileId),
     enabled: !isSelf,
+  });
+
+  const { data: workingHours = emptyWorkingHoursData[workingHoursRange], isLoading: isWorkingHoursLoading } = useQuery({
+    queryKey: ["working-hours", workingHoursRange],
+    queryFn: () => getWorkingHours(workingHoursRange),
+    enabled: isSelf,
   });
 
   useEffect(() => {
@@ -73,6 +107,10 @@ export default function ProfilePage() {
   const secondary = activeProfile?.email || activeProfile?.username || "No email on file";
   const initials = (activeProfile?.firstName?.[0] || activeProfile?.username?.[0] || activeProfile?.email?.[0] || "U").toUpperCase();
   const avatarUrl = profileForm.profileImageUrl || activeProfile?.profileImageUrl || "";
+  const chartData = useMemo(
+    () => (isSelf ? workingHours : emptyWorkingHoursData[workingHoursRange]),
+    [isSelf, workingHours, workingHoursRange],
+  );
 
   return (
     <div className="min-h-screen bg-[#060707] text-white relative overflow-hidden">
@@ -272,24 +310,89 @@ export default function ProfilePage() {
 
             <motion.div
               whileHover={{ scale: 1.01 }}
-              className="border border-white/10 bg-gradient-to-br from-[#0a1114] via-black to-[#070909] p-6"
+              className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a1114] via-black to-[#070909] p-6 shadow-[0_18px_60px_rgba(29,210,184,0.08)]"
             >
-              <div className="flex items-center gap-3">
-                <Zap className="w-6 h-6 text-[#8ef5d1]" />
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-white/40 font-mono">Momentum</p>
-                  <p className="text-lg font-oxanium mt-1">Peak Hours</p>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl border border-[#8ef5d1]/20 bg-[#8ef5d1]/10 p-2">
+                    <Zap className="h-5 w-5 text-[#8ef5d1]" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-oxanium">Working Hours</p>
+                    <p className="mt-1 text-xs text-white/40">
+                      {isWorkingHoursLoading ? "Loading productivity data..." : "Track your productivity over time"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex w-fit rounded-lg border border-white/10 bg-black/40 p-1">
+                  {(["Day", "Week", "Month"] as WorkingHoursRange[]).map((range) => (
+                    <button
+                      key={range}
+                      type="button"
+                      onClick={() => setWorkingHoursRange(range)}
+                      aria-pressed={workingHoursRange === range}
+                      className={`rounded-md px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition ${
+                        workingHoursRange === range
+                          ? "bg-white/10 text-[#8ef5d1] shadow-[0_0_16px_rgba(142,245,209,0.12)]"
+                          : "text-white/35 hover:text-white/70"
+                      }`}
+                    >
+                      {range}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-4 gap-2">
-                {Array.from({ length: 8 }).map((_, index) => (
-                  <div
-                    key={`pulse-${index}`}
-                    className={`h-12 border border-white/10 ${index % 2 === 0 ? "bg-[#8ef5d1]/20" : "bg-white/5"}`}
-                  />
-                ))}
+              <div className="mt-6 h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 8, right: 16, left: -18, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="workingHoursGradient" x1="0" y1="1" x2="0" y2="0">
+                        <stop offset="0%" stopColor="#277db8" />
+                        <stop offset="55%" stopColor="#32c9a4" />
+                        <stop offset="100%" stopColor="#8ef5d1" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.07)" strokeDasharray="3 5" />
+                    <XAxis
+                      dataKey="label"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "rgba(255,255,255,0.38)", fontSize: 10 }}
+                      dy={8}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }}
+                      tickFormatter={(value) => `${value}h`}
+                    />
+                    <Tooltip
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      cursor={{ fill: "rgba(142,245,209,0.05)" }}
+                      offset={14}
+                      wrapperStyle={{ zIndex: 50, outline: "none", pointerEvents: "none" }}
+                      content={({ active, payload }) => {
+                        const point = payload?.[0]?.payload as WorkingHoursPoint | undefined;
+                        if (!active || !point) return null;
+                        return (
+                          <div className="rounded-xl border border-[#8ef5d1]/20 bg-[#07100f]/95 px-3 py-2 shadow-[0_12px_30px_rgba(0,0,0,0.45)] backdrop-blur">
+                            <p className="text-[10px] font-mono uppercase tracking-wider text-white/40">{point.date}</p>
+                            <p className="mt-1 text-sm font-oxanium text-[#8ef5d1]">{point.hours} hours</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar
+                      dataKey="hours"
+                      fill="url(#workingHoursGradient)"
+                      radius={[7, 7, 2, 2]}
+                      maxBarSize={38}
+                      animationDuration={900}
+                      animationEasing="ease-out"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <p className="text-white/40 text-xs mt-4">Tap into your strongest collaboration windows.</p>
             </motion.div>
           </div>
         </motion.div>

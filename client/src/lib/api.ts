@@ -1,5 +1,13 @@
 import type { Workflow, InsertWorkflow, Step, IntelDoc, Activity, WorkflowWithSteps, StepWithDetails, WorkflowShare, CompositeWorkflow, CompositeWorkflowWithItems, Note, AudioTrack, DailyTask } from "@shared/schema";
 
+export type WorkingHoursRange = "Day" | "Week" | "Month";
+
+export type WorkingHoursPoint = {
+  label: string;
+  date: string;
+  hours: number;
+};
+
 export async function getActiveWorkflow(): Promise<WorkflowWithSteps | null> {
   const res = await fetch("/api/workflows/active");
   if (res.status === 404) {
@@ -295,6 +303,12 @@ export async function updateUserProfile(payload: {
 export async function getUserProfile(userId: string) {
   const res = await fetch(`/api/users/${userId}`);
   if (!res.ok) throw new Error("Failed to fetch profile");
+  return res.json();
+}
+
+export async function getWorkingHours(range: WorkingHoursRange): Promise<WorkingHoursPoint[]> {
+  const res = await fetch(`/api/profile/working-hours?range=${encodeURIComponent(range)}`);
+  if (!res.ok) throw new Error("Failed to fetch working hours");
   return res.json();
 }
 
