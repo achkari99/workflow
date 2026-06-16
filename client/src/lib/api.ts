@@ -210,6 +210,23 @@ export async function updateStep(id: number, data: Partial<Step>): Promise<Step>
   return res.json();
 }
 
+export async function createStep(payload: {
+  workflowId: number;
+  stepNumber: number;
+  name: string;
+  description?: string | null;
+  status?: string;
+  proofRequired?: boolean;
+}): Promise<Step> {
+  const res = await fetch("/api/steps", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to create step");
+  return res.json();
+}
+
 export async function startStep(id: number): Promise<Step> {
   const res = await fetch(`/api/steps/${id}/start`, { method: "POST" });
   if (!res.ok) throw new Error("Failed to start step");

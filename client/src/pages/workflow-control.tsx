@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getWorkflow, updateStep, updateStepProofConfig, deleteStepProof } from "@/lib/api";
+import { createStep, getWorkflow, updateStep, updateStepProofConfig, deleteStepProof, updateWorkflow } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Shield, FileText, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, Shield, FileText, CheckCircle2, Plus } from "lucide-react";
 import type { Step, WorkflowWithSteps } from "@shared/schema";
 
 const statusLabel: Record<string, string> = {
@@ -22,8 +22,12 @@ export default function WorkflowControl() {
   const [selectedStepId, setSelectedStepId] = useState<number | null>(null);
   const [proofRequired, setProofRequired] = useState(false);
   const [isEditingStep, setIsEditingStep] = useState(false);
+  const [isAddingStep, setIsAddingStep] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [newStepName, setNewStepName] = useState("");
+  const [newStepDescription, setNewStepDescription] = useState("");
+  const [newStepProofRequired, setNewStepProofRequired] = useState(false);
 
   const { data: workflow, isLoading } = useQuery<WorkflowWithSteps>({
     queryKey: ["workflow", workflowId],
@@ -78,6 +82,35 @@ export default function WorkflowControl() {
     },
   });
 
+  const addStepMutation = useMutation({
+    mutationFn: async () => {
+      if (!workflow) {
+        throw new Error("No workflow loaded");
+      }
+      const nextStepNumber = workflow.steps.length + 1;
+      const step = await createStep({
+        workflowId: workflow.id,
+        stepNumber: nextStepNumber,
+        name: newStepName.trim(),
+        description: newStepDescription.trim() || null,
+        status: "locked",
+        proofRequired: newStepProofRequired,
+      });
+      await updateWorkflow(workflow.id, { totalSteps: nextStepNumber });
+      return step;
+    },
+    onSuccess: (step) => {
+      queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
+      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+      queryClient.invalidateQueries({ queryKey: ["activeWorkflow"] });
+      setSelectedStepId(step.id);
+      setNewStepName("");
+      setNewStepDescription("");
+      setNewStepProofRequired(false);
+      setIsAddingStep(false);
+    },
+  });
+
   return (
     <div className="min-h-screen bg-black text-foreground">
       <header className="h-14 border-b border-white/5 bg-black/60 flex items-center justify-between px-4">
@@ -99,7 +132,18 @@ export default function WorkflowControl() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] min-h-[calc(100vh-56px)]">
         <aside className="border-r border-white/5 bg-black/60 p-4">
-          <h2 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-4">Steps</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Steps</h2>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsAddingStep(true)}
+              className="h-8 border border-white/10 bg-white/5 px-2 text-[10px] font-mono uppercase tracking-widest text-white/60 hover:text-primary"
+            >
+              <Plus className="mr-1 h-3 w-3" />
+              Add
+            </Button>
+          </div>
           {isLoading ? (
             <div className="flex justify-center py-10 text-white/40 text-xs">Loading...</div>
           ) : !workflow?.steps?.length ? (
@@ -251,6 +295,70 @@ export default function WorkflowControl() {
                 {editStepMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
               <Button variant="ghost" onClick={() => setIsEditingStep(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAddingStep && workflow && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-xl flex items-center justify-center z-50 p-4"
+          onClick={() => setIsAddingStep(false)}
+        >
+          <div
+            className="bg-black/90 border border-white/10 p-6 w-full max-w-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg text-white font-display">Add Step</h3>
+                <p className="mt-1 text-[10px] font-mono uppercase tracking-widest text-white/40">
+                  Step {workflow.steps.length + 1} will be appended to this mission
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setIsAddingStep(false)}>
+                <ChevronLeft className="w-4 h-4 text-white/40 rotate-180" />
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Title</label>
+                <input
+                  value={newStepName}
+                  onChange={(e) => setNewStepName(e.target.value)}
+                  placeholder={`Step ${workflow.steps.length + 1} title`}
+                  className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Description</label>
+                <textarea
+                  value={newStepDescription}
+                  onChange={(e) => setNewStepDescription(e.target.value)}
+                  placeholder="Describe what needs to be done in this step"
+                  className="mt-2 w-full bg-black/40 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[90px] resize-none"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-[11px] text-white/50 font-mono uppercase tracking-widest">
+                <input
+                  type="checkbox"
+                  checked={newStepProofRequired}
+                  onChange={(e) => setNewStepProofRequired(e.target.checked)}
+                />
+                Require proof for this step
+              </label>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <Button
+                onClick={() => addStepMutation.mutate()}
+                disabled={addStepMutation.isPending || !newStepName.trim()}
+                className="flex-1 bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
+              >
+                {addStepMutation.isPending ? "Adding..." : "Add Step"}
+              </Button>
+              <Button variant="ghost" onClick={() => setIsAddingStep(false)}>
                 Cancel
               </Button>
             </div>
