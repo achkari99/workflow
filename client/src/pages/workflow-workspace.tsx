@@ -226,13 +226,13 @@ function ExecutionCenter({
             <p className="text-sm text-white/50 mt-2">{step.description || "Add a step description."}</p>
           </div>
           <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
-            Submission{isProofRequired ? ": Proofs are required for this step" : ""}
+            Submission{isProofRequired ? ": Proofs are required for this step" : ": Proofs are optional for this step"}
           </p>
           <textarea
             value={proofContent}
             onChange={(e) => onProofContentChange(e.target.value)}
-            placeholder={isProofRequired ? "Write your proof..." : "No proof needed"}
-            disabled={!canEditProof || !isProofRequired || (!isEditingProof && isProofSubmitted)}
+            placeholder={isProofRequired ? "Write your proof..." : "Add optional proof..."}
+            disabled={!canEditProof || (!isEditingProof && isProofSubmitted)}
             className="w-full flex-1 bg-black/30 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[140px] resize-none disabled:opacity-40"
           />
           {(proofFile || proofFileUrl) && (
@@ -249,7 +249,6 @@ function ExecutionCenter({
           <div className="flex items-center gap-3 mt-auto">
             <Button
               onClick={() => {
-                if (!isProofRequired) return;
                 if (isProofSubmitted && !isEditingProof) {
                   onToggleEditProof();
                   return;
@@ -257,7 +256,6 @@ function ExecutionCenter({
                 onSubmitProof();
               }}
               disabled={
-                !isProofRequired ||
                 !canEditProof ||
                 isSubmittingProof ||
                 (!(isProofSubmitted && !isEditingProof) && !proofContent.trim() && !proofFile)
@@ -271,7 +269,7 @@ function ExecutionCenter({
             </Button>
             <label
               htmlFor={proofFileInputId}
-              className={`h-11 px-4 border border-white/10 text-xs font-mono uppercase tracking-widest flex items-center justify-center cursor-pointer ${!isProofRequired || !canEditProof || (isProofSubmitted && !isEditingProof) ? "opacity-40 cursor-not-allowed" : "hover:border-primary/50"
+              className={`h-11 px-4 border border-white/10 text-xs font-mono uppercase tracking-widest flex items-center justify-center cursor-pointer ${!canEditProof || (isProofSubmitted && !isEditingProof) ? "opacity-40 cursor-not-allowed" : "hover:border-primary/50"
                 }`}
             >
               Upload
@@ -281,7 +279,7 @@ function ExecutionCenter({
               type="file"
               accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/json,text/*,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
               onChange={(e) => onSelectProofFile(e.target.files?.[0] || null)}
-              disabled={!isProofRequired || !canEditProof || (isProofSubmitted && !isEditingProof)}
+              disabled={!canEditProof || (isProofSubmitted && !isEditingProof)}
               className="hidden"
             />
           </div>
@@ -696,10 +694,6 @@ export default function WorkflowWorkspace() {
     setProofFile(null);
     setEditName(stepDetails.name || "");
     setEditDescription(stepDetails.description || "");
-    if (!stepDetails.proofRequired) {
-      setIsEditingProof(false);
-      return;
-    }
     setIsEditingProof(!stepDetails.proofSubmittedAt);
   }, [stepDetails]);
 
@@ -972,6 +966,60 @@ export default function WorkflowWorkspace() {
           </SheetContent>
         </Sheet>
       </div>
+
+      {isEditingStep && stepDetails && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xl"
+          onClick={() => setIsEditingStep(false)}
+        >
+          <div
+            className="w-full max-w-2xl border border-white/10 bg-black/90 p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-lg text-white">Edit Step</h3>
+                <p className="mt-1 text-[10px] font-mono uppercase tracking-widest text-white/40">
+                  Step {stepDetails.stepNumber}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setIsEditingStep(false)}>
+                <ChevronLeft className="h-4 w-4 rotate-180 text-white/40" />
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-mono uppercase tracking-widest text-white/40">Title</label>
+                <input
+                  value={editName}
+                  onChange={(event) => setEditName(event.target.value)}
+                  className="mt-2 w-full border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono uppercase tracking-widest text-white/40">Description</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(event) => setEditDescription(event.target.value)}
+                  className="mt-2 min-h-[90px] w-full resize-none border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="mt-5 flex gap-2">
+              <Button
+                onClick={() => editStepMutation.mutate()}
+                disabled={editStepMutation.isPending || !editName.trim()}
+                className="flex-1 bg-primary font-mono uppercase tracking-widest text-black hover:bg-primary/90"
+              >
+                {editStepMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="ghost" onClick={() => setIsEditingStep(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

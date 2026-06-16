@@ -79,7 +79,7 @@ export default function WorkflowCreate() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim() && stepConfig.every((step) => step.title.trim() && step.description.trim())) {
+    if (name.trim() && stepConfig.every((step) => step.title.trim())) {
       createMutation.mutate();
     }
   };
@@ -181,7 +181,7 @@ export default function WorkflowCreate() {
                 <label className="text-xs font-mono text-white/40 uppercase tracking-widest">
                   Step Briefs + Proof
                 </label>
-                <span className="text-[10px] text-white/30 font-mono uppercase tracking-widest">Briefs required</span>
+                <span className="text-[10px] text-white/30 font-mono uppercase tracking-widest">Titles required</span>
               </div>
               <div className="space-y-3">
                 {proofConfig.map((config, index) => (
@@ -215,7 +215,6 @@ export default function WorkflowCreate() {
                           )
                         }
                         placeholder="Step description"
-                        required
                         className="w-full bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary min-h-[80px] resize-none"
                       />
                     </div>
@@ -279,7 +278,7 @@ export default function WorkflowCreate() {
             <div className="pt-6 border-t border-white/5">
               <Button
                 type="submit"
-                disabled={!name.trim() || stepConfig.some((step) => !step.title.trim() || !step.description.trim()) || createMutation.isPending}
+                disabled={!name.trim() || stepConfig.some((step) => !step.title.trim()) || createMutation.isPending}
                 className="w-full bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-wider py-6 text-lg"
                 data-testid="button-create-workflow"
               >
