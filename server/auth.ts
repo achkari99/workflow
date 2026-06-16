@@ -8,6 +8,7 @@ import rateLimit from "express-rate-limit";
 import { authStorage } from "./authStorage";
 import { type User as SelectUser } from "@shared/models/auth";
 import { storage } from "./storage";
+import { supabase } from "./supabase";
 
 declare global {
   namespace Express {
@@ -125,6 +126,31 @@ export async function setupAuth(app: Express) {
     } catch (error) {
       console.error("Registration Error:", error);
       res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  app.post("/api/forgot-password", authLimiter, async (req, res) => {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const origin = req.get("origin") || `${req.protocol}://${req.get("host")}`;
+    const redirectTo = `${origin}/auth`;
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      });
+
+      if (error) {
+        console.error("Password Reset Email Error:", error.message);
+      }
+
+      res.json({ message: "If an account exists, a password reset email has been sent." });
+    } catch (error) {
+      console.error("Password Reset Request Error:", error);
+      res.status(500).json({ message: "Failed to request password reset" });
     }
   });
 
