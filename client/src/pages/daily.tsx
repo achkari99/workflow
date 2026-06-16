@@ -84,6 +84,12 @@ export default function DailyPage() {
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && title.trim() && !createMutation.isPending) {
+                  e.preventDefault();
+                  createMutation.mutate();
+                }
+              }}
               placeholder="Task title"
               className="flex-1 bg-black/40 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
             />
