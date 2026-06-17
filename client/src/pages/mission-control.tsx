@@ -44,8 +44,6 @@ export default function MissionControl() {
   const activeStep = activeWorkflow?.steps?.find(
     (step) => step.stepNumber === activeWorkflow.currentStep
   ) || null;
-  const secondaryWorkflows = allWorkflows?.filter(w => !w.isActive) || [];
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -295,37 +293,6 @@ export default function MissionControl() {
                 <MomentumTicker />
               </div>
             </div>
-
-            {/* Secondary Missions (Desktop) */}
-            {secondaryWorkflows.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.6 }}
-                transition={{ delay: 1 }}
-                whileHover={{ opacity: 1 }}
-                className="mt-auto pt-12 hidden lg:block"
-              >
-                <h3 className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-4">Secondary Objectives</h3>
-                <ul className="space-y-3">
-                  {secondaryWorkflows.slice(0, 3).map((workflow, i) => (
-                    <motion.li
-                      key={workflow.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 1.1 + i * 0.1 }}
-                      whileHover={{ x: 4 }}
-                      className="flex items-center gap-3 text-sm group cursor-pointer"
-                    >
-                      <motion.span
-                        className="w-1.5 h-1.5 bg-white/20 rotate-45 group-hover:bg-primary transition-colors"
-                        whileHover={{ scale: 1.3 }}
-                      />
-                      <span className="text-muted-foreground group-hover:text-white transition-colors">{workflow.name}</span>
-                    </motion.li>
-                  ))}
-                </ul>
-              </motion.div>
-            )}
           </div>
 
           {/* Right Column - Active Mission */}
@@ -364,21 +331,6 @@ export default function MissionControl() {
             <div className="mt-12 w-full lg:hidden">
               <MomentumTicker />
             </div>
-
-            {/* Mobile Secondary Missions */}
-            {secondaryWorkflows.length > 0 && (
-              <div className="mt-12 w-full lg:hidden opacity-80">
-                <h3 className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-4">Secondary Objectives</h3>
-                <ul className="space-y-3">
-                  {secondaryWorkflows.slice(0, 3).map((workflow) => (
-                    <li key={workflow.id} className="flex items-center gap-3 text-sm border-b border-white/5 pb-2">
-                      <span className="w-1.5 h-1.5 bg-white/20 rotate-45" />
-                      <span className="text-muted-foreground">{workflow.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
         </main>
       </div>

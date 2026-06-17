@@ -133,7 +133,7 @@ export async function getDailyTasks(): Promise<DailyTask[]> {
   return res.json();
 }
 
-export async function createDailyTask(payload: { title: string }): Promise<DailyTask> {
+export async function createDailyTask(payload: { title: string; priority?: string }): Promise<DailyTask> {
   const res = await fetch("/api/daily", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -145,7 +145,7 @@ export async function createDailyTask(payload: { title: string }): Promise<Daily
 
 export async function updateDailyTask(
   id: number,
-  payload: { title?: string; isCompleted?: boolean }
+  payload: { title?: string; priority?: string; isCompleted?: boolean }
 ): Promise<DailyTask> {
   const res = await fetch(`/api/daily/${id}`, {
     method: "PATCH",

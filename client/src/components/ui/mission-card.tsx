@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface MissionCardProps {
   questName: string;
@@ -28,6 +29,7 @@ export function MissionCard({
 }: MissionCardProps) {
   const [, navigate] = useLocation();
   const [showSuccess, setShowSuccess] = useState(false);
+  const isMobile = useIsMobile();
   const isComplete = currentStep >= totalSteps;
 
   const handleContinue = () => {
@@ -48,31 +50,37 @@ export function MissionCard({
       className="w-full max-w-2xl relative group"
     >
       {/* Ambient glow effect - breathing animation */}
-      <motion.div
-        className="absolute -inset-1 bg-gradient-to-r from-primary/50 to-purple-500/50 rounded-lg blur opacity-20"
-        animate={{
-          opacity: [0.15, 0.25, 0.15],
-          scale: [1, 1.02, 1],
-        }}
-        transition={{
-          duration: 4,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
+      {!isMobile && (
+        <motion.div
+          className="absolute -inset-1 bg-gradient-to-r from-primary/50 to-purple-500/50 rounded-lg blur opacity-20"
+          animate={{
+            opacity: [0.15, 0.25, 0.15],
+            scale: [1, 1.02, 1],
+          }}
+          transition={{
+            duration: 4,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      )}
 
       {/* Hover glow intensifier */}
-      <div className="absolute -inset-1 bg-gradient-to-r from-primary/50 to-purple-500/50 rounded-lg blur opacity-0 group-hover:opacity-30 transition-opacity duration-500" />
+      {!isMobile && (
+        <div className="absolute -inset-1 bg-gradient-to-r from-primary/50 to-purple-500/50 rounded-lg blur opacity-0 group-hover:opacity-30 transition-opacity duration-500" />
+      )}
 
-      <Card className="relative border-primary/30 bg-card/90 backdrop-blur-sm overflow-hidden clip-corner-tr border-l-4 border-l-primary group-hover:border-l-primary/80 transition-colors duration-300">
+      <Card className="relative border-primary/30 bg-card/90 md:backdrop-blur-sm overflow-hidden clip-corner-tr border-l-4 border-l-primary group-hover:border-l-primary/80 transition-colors duration-300">
         {/* Background icon with subtle rotation */}
-        <motion.div
-          className="absolute top-0 right-0 p-4 opacity-[0.07] pointer-events-none"
-          animate={{ rotate: [0, 3, -3, 0] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <Target className="w-32 h-32 text-primary" />
-        </motion.div>
+        {!isMobile && (
+          <motion.div
+            className="absolute top-0 right-0 p-4 opacity-[0.07] pointer-events-none"
+            animate={{ rotate: [0, 3, -3, 0] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <Target className="w-32 h-32 text-primary" />
+          </motion.div>
+        )}
 
         <CardHeader className="pb-2">
           <motion.div
@@ -81,22 +89,32 @@ export function MissionCard({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <motion.span
-              className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono uppercase tracking-wider border border-primary/20"
-              animate={{
-                boxShadow: ["0 0 0px hsla(190, 100%, 50%, 0)", "0 0 8px hsla(190, 100%, 50%, 0.3)", "0 0 0px hsla(190, 100%, 50%, 0)"]
-              }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            >
-              Active Quest
-            </motion.span>
-            <span className="text-muted-foreground text-xs font-mono uppercase tracking-wider flex items-center gap-1">
+            {isMobile ? (
+              <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono uppercase tracking-wider border border-primary/20">
+                Active Quest
+              </span>
+            ) : (
               <motion.span
-                animate={{ scale: [1, 1.2, 1], opacity: [0.8, 1, 0.8] }}
-                transition={{ duration: 2, repeat: Infinity }}
+                className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono uppercase tracking-wider border border-primary/20"
+                animate={{
+                  boxShadow: ["0 0 0px hsla(190, 100%, 50%, 0)", "0 0 8px hsla(190, 100%, 50%, 0.3)", "0 0 0px hsla(190, 100%, 50%, 0)"]
+                }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
               >
-                <Zap className="w-3 h-3 text-yellow-500" />
+                Active Quest
               </motion.span>
+            )}
+            <span className="text-muted-foreground text-xs font-mono uppercase tracking-wider flex items-center gap-1">
+              {isMobile ? (
+                <Zap className="w-3 h-3 text-yellow-500" />
+              ) : (
+                <motion.span
+                  animate={{ scale: [1, 1.2, 1], opacity: [0.8, 1, 0.8] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <Zap className="w-3 h-3 text-yellow-500" />
+                </motion.span>
+              )}
               High Priority
             </span>
           </motion.div>
@@ -184,14 +202,16 @@ export function MissionCard({
             {/* Continue Mission Button with breathing and feedback */}
             <motion.div className="flex-1 relative">
               {/* Breathing glow behind button */}
-              <motion.div
-                className="absolute inset-0 bg-primary/30 rounded-md blur-xl"
-                animate={!isComplete && !isLoading ? {
-                  opacity: [0.3, 0.5, 0.3],
-                  scale: [0.95, 1.02, 0.95],
-                } : { opacity: 0 }}
-                transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-              />
+              {!isMobile && (
+                <motion.div
+                  className="absolute inset-0 bg-primary/30 rounded-md blur-xl"
+                  animate={!isComplete && !isLoading ? {
+                    opacity: [0.3, 0.5, 0.3],
+                    scale: [0.95, 1.02, 0.95],
+                  } : { opacity: 0 }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                />
+              )}
 
               <Button
                 size="lg"
@@ -251,12 +271,16 @@ export function MissionCard({
                         className="flex items-center gap-2"
                       >
                         Continue Mission
-                        <motion.span
-                          animate={{ x: [0, 4, 0] }}
-                          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                        >
+                        {isMobile ? (
                           <ArrowRight className="w-5 h-5" />
-                        </motion.span>
+                        ) : (
+                          <motion.span
+                            animate={{ x: [0, 4, 0] }}
+                            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                          >
+                            <ArrowRight className="w-5 h-5" />
+                          </motion.span>
+                        )}
                       </motion.span>
                     )}
                   </AnimatePresence>

@@ -339,7 +339,7 @@ export class WorkflowStorage {
             .select()
             .from(dailyTasks)
             .where(eq(dailyTasks.userId, userId))
-            .orderBy(desc(dailyTasks.updatedAt));
+            .orderBy(desc(dailyTasks.createdAt));
     }
 
     async createDailyTask(task: InsertDailyTask): Promise<DailyTask> {

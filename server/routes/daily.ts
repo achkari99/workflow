@@ -53,6 +53,7 @@ export function registerDailyRoutes(app: Express) {
       }
       const updatePayload: Record<string, any> = {};
       if (typeof req.body.title === "string") updatePayload.title = req.body.title;
+      if (typeof req.body.priority === "string") updatePayload.priority = req.body.priority;
       if (typeof req.body.isCompleted === "boolean") updatePayload.isCompleted = req.body.isCompleted;
       if (Object.keys(updatePayload).length === 0) {
         return res.status(400).json({ error: "No updates provided" });

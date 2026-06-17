@@ -1,6 +1,17 @@
 import { motion } from "framer-motion";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export function AmbientBackground() {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,hsla(var(--primary),0.08),transparent_34%),radial-gradient(circle_at_85%_85%,rgba(168,85,247,0.05),transparent_32%),linear-gradient(to_bottom,transparent,rgba(0,0,0,0.18))]" />
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
       {/* Slow-moving gradient orbs */}

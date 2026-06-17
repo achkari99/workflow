@@ -1,7 +1,9 @@
 import { motion } from "framer-motion";
 import { Flame, Zap, Flag } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export function MomentumTicker() {
+  const isMobile = useIsMobile();
   const items = [
     { icon: Flame, text: "3-day build streak", color: "text-orange-500" },
     { icon: Zap, text: "Velocity: High", color: "text-yellow-400" },
@@ -23,19 +25,23 @@ export function MomentumTicker() {
           }}
           className="flex items-center gap-2 bg-secondary/50 backdrop-blur-sm px-4 py-2 rounded border border-white/5 transition-colors whitespace-nowrap cursor-default"
         >
-          <motion.div
-            animate={{
-              scale: [1, 1.15, 1],
-              opacity: [0.8, 1, 0.8],
-            }}
-            transition={{
-              duration: 2 + index * 0.5,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          >
+          {isMobile ? (
             <item.icon className={`w-4 h-4 ${item.color}`} />
-          </motion.div>
+          ) : (
+            <motion.div
+              animate={{
+                scale: [1, 1.15, 1],
+                opacity: [0.8, 1, 0.8],
+              }}
+              transition={{
+                duration: 2 + index * 0.5,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+            >
+              <item.icon className={`w-4 h-4 ${item.color}`} />
+            </motion.div>
+          )}
           <span className="text-sm font-mono font-medium text-secondary-foreground uppercase tracking-wide">
             {item.text}
           </span>
