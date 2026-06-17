@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createDailyTask, deleteDailyTask, getDailyTasks, updateDailyTask } from "@/lib/api";
+import type { DailyTask } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { Check, ChevronLeft, ListChecks, Loader2, Plus, Trash2, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 
 export default function DailyPage() {
   const [, navigate] = useLocation();
@@ -18,10 +20,40 @@ export default function DailyPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => createDailyTask({ title: title.trim() }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["daily-tasks"] });
+    mutationFn: (taskTitle: string) => createDailyTask({ title: taskTitle }),
+    onMutate: async (taskTitle) => {
+      await queryClient.cancelQueries({ queryKey: ["daily-tasks"] });
+      const previousTasks = queryClient.getQueryData<DailyTask[]>(["daily-tasks"]);
+      const tempId = -Date.now();
+      const now = new Date();
+
+      queryClient.setQueryData<DailyTask[]>(["daily-tasks"], (currentTasks = []) => [
+        {
+          id: tempId,
+          userId: "optimistic",
+          title: taskTitle,
+          isCompleted: false,
+          createdAt: now,
+          updatedAt: now,
+        },
+        ...currentTasks,
+      ]);
+
       setTitle("");
+      return { previousTasks, tempId };
+    },
+    onSuccess: (createdTask, _taskTitle, context) => {
+      queryClient.setQueryData<DailyTask[]>(["daily-tasks"], (currentTasks = []) =>
+        currentTasks.map((task) => (task.id === context.tempId ? createdTask : task))
+      );
+    },
+    onError: (_error, _taskTitle, context) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(["daily-tasks"], context.previousTasks);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["daily-tasks"] });
     },
   });
 
@@ -37,6 +69,23 @@ export default function DailyPage() {
   const toggleMutation = useMutation({
     mutationFn: (payload: { id: number; isCompleted: boolean }) =>
       updateDailyTask(payload.id, { isCompleted: payload.isCompleted }),
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: ["daily-tasks"] });
+      const previousTasks = queryClient.getQueryData<DailyTask[]>(["daily-tasks"]);
+
+      queryClient.setQueryData<DailyTask[]>(["daily-tasks"], (currentTasks = []) =>
+        currentTasks.map((task) =>
+          task.id === payload.id ? { ...task, isCompleted: payload.isCompleted } : task
+        )
+      );
+
+      return { previousTasks };
+    },
+    onError: (_error, _payload, context) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(["daily-tasks"], context.previousTasks);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["daily-tasks"] });
     },
@@ -87,14 +136,14 @@ export default function DailyPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && title.trim() && !createMutation.isPending) {
                   e.preventDefault();
-                  createMutation.mutate();
+                  createMutation.mutate(title.trim());
                 }
               }}
               placeholder="Task title"
               className="flex-1 bg-black/40 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
             />
             <Button
-              onClick={() => createMutation.mutate()}
+              onClick={() => createMutation.mutate(title.trim())}
               disabled={createMutation.isPending || !title.trim()}
               className="bg-primary hover:bg-primary/90 text-black font-mono uppercase tracking-widest"
             >
@@ -110,20 +159,47 @@ export default function DailyPage() {
           </div>
         ) : tasks.length > 0 ? (
           <div className="grid gap-3">
-            {tasks.map((task) => {
-              const isEditing = editingId === task.id;
-              return (
-                <div
-                  key={task.id}
-                  className={`border border-white/10 bg-white/5 p-4 flex items-center gap-3 ${task.isCompleted ? "opacity-70" : ""}`}
-                >
-                  <button
+            <AnimatePresence initial={false}>
+              {tasks.map((task) => {
+                const isEditing = editingId === task.id;
+                return (
+                  <motion.div
+                    key={task.id}
+                    layout
+                    initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                    animate={{ opacity: task.isCompleted ? 0.7 : 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: 18, scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                    className="border border-white/10 bg-white/5 p-4 flex items-center gap-3"
+                  >
+                  <motion.button
                     type="button"
                     onClick={() => toggleMutation.mutate({ id: task.id, isCompleted: !task.isCompleted })}
-                    className={`h-6 w-6 border border-white/20 flex items-center justify-center ${task.isCompleted ? "bg-primary/20 border-primary/40" : "bg-black/40"}`}
+                    whileTap={{ scale: 0.82 }}
+                    animate={{
+                      scale: task.isCompleted ? 1.08 : 1,
+                      boxShadow: task.isCompleted
+                        ? "0 0 22px rgba(34, 211, 238, 0.35)"
+                        : "0 0 0 rgba(34, 211, 238, 0)",
+                    }}
+                    transition={{ type: "spring", stiffness: 520, damping: 28 }}
+                    className={`h-6 w-6 border flex items-center justify-center transition-colors duration-150 ${task.isCompleted ? "bg-primary/20 border-primary/50" : "bg-black/40 border-white/20 hover:border-primary/40"}`}
+                    aria-pressed={task.isCompleted}
                   >
-                    {task.isCompleted && <Check className="w-3 h-3 text-primary" />}
-                  </button>
+                    <AnimatePresence initial={false}>
+                      {task.isCompleted && (
+                        <motion.span
+                          key="check"
+                          initial={{ opacity: 0, scale: 0.4, rotate: -45 }}
+                          animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                          exit={{ opacity: 0, scale: 0.35, rotate: 35 }}
+                          transition={{ duration: 0.16 }}
+                        >
+                          <Check className="w-3 h-3 text-primary" />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
                   {isEditing ? (
                     <div className="flex-1 flex items-center gap-2">
                       <input
@@ -179,9 +255,10 @@ export default function DailyPage() {
                       </Button>
                     </>
                   )}
-                </div>
-              );
-            })}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         ) : (
           <div className="text-center py-12 text-white/40">
