@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createNote, deleteNote, getNotes, updateNote } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Loader2, Plus, StickyNote, Trash2, PencilLine, X } from "lucide-react";
+import { Check, ChevronLeft, Copy, Loader2, Plus, StickyNote, Trash2, PencilLine, X } from "lucide-react";
 import { useLocation } from "wouter";
 
 export default function NotesPage() {
@@ -13,6 +13,7 @@ export default function NotesPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
+  const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const { data: notes, isLoading } = useQuery({
     queryKey: ["notes"],
@@ -53,6 +54,14 @@ export default function NotesPage() {
     setEditingId(note.id);
     setEditTitle(note.title);
     setEditContent(note.content || "");
+  };
+
+  const copyNote = async (note: { id: number; title: string; content: string | null }) => {
+    const noteText = [note.title, note.content].filter(Boolean).join("\n\n");
+
+    await navigator.clipboard.writeText(noteText);
+    setCopiedId(note.id);
+    window.setTimeout(() => setCopiedId((current) => (current === note.id ? null : current)), 1400);
   };
 
   return (
@@ -160,6 +169,16 @@ export default function NotesPage() {
                       <div className="flex items-center justify-between mb-3">
                         <h2 className="text-lg text-white">{note.title}</h2>
                         <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => copyNote(note)}
+                            className="text-white/50 hover:text-primary"
+                            title="Copy note"
+                            aria-label="Copy note"
+                          >
+                            {copiedId === note.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

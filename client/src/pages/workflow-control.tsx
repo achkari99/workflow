@@ -88,15 +88,20 @@ export default function WorkflowControl() {
         throw new Error("No workflow loaded");
       }
       const nextStepNumber = workflow.steps.length + 1;
+      const hasOpenStep = workflow.steps.some((step) => !step.isCompleted && step.status !== "completed");
+      const status = hasOpenStep ? "locked" : "active";
       const step = await createStep({
         workflowId: workflow.id,
         stepNumber: nextStepNumber,
         name: newStepName.trim(),
         description: newStepDescription.trim() || null,
-        status: "locked",
+        status,
         proofRequired: newStepProofRequired,
       });
-      await updateWorkflow(workflow.id, { totalSteps: nextStepNumber });
+      await updateWorkflow(workflow.id, {
+        totalSteps: nextStepNumber,
+        ...(hasOpenStep ? {} : { currentStep: nextStepNumber }),
+      });
       return step;
     },
     onSuccess: (step) => {
