@@ -1,5 +1,6 @@
 import { WorkflowStorage } from "./storage_modules/workflows";
 import { CompositeStorage } from "./storage_modules/composites";
+import { DocumentsStorage } from "./storage_modules/documents";
 import {
   type WorkflowWithSteps,
   type Workflow,
@@ -21,6 +22,12 @@ import {
   type InsertAudioTrack,
   type DailyTask,
   type InsertDailyTask,
+  type DocumentProject,
+  type InsertDocumentProject,
+  type DocumentFolder,
+  type InsertDocumentFolder,
+  type DocumentItem,
+  type InsertDocumentItem,
   type CompositeWorkflowWithItems,
   type CompositeWorkflow,
   type InsertCompositeWorkflow,
@@ -98,6 +105,25 @@ export interface IStorage {
   createDailyTask(task: InsertDailyTask): Promise<DailyTask>;
   updateDailyTask(id: number, task: Partial<InsertDailyTask>): Promise<DailyTask | undefined>;
   deleteDailyTask(id: number): Promise<boolean>;
+  reorderDailyTasks(userId: string, orderedIds: number[]): Promise<DailyTask[]>;
+
+  // Documents
+  getDocumentProjectsByUser(userId: string): Promise<DocumentProject[]>;
+  getDocumentProject(id: number): Promise<DocumentProject | undefined>;
+  createDocumentProject(project: InsertDocumentProject): Promise<DocumentProject>;
+  updateDocumentProject(id: number, project: Partial<InsertDocumentProject>): Promise<DocumentProject | undefined>;
+  deleteDocumentProject(id: number): Promise<boolean>;
+  getDocumentFoldersByProject(projectId: number): Promise<DocumentFolder[]>;
+  getDocumentFolder(id: number): Promise<DocumentFolder | undefined>;
+  createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
+  deleteDocumentFolder(id: number): Promise<boolean>;
+  getDocumentItems(projectId: number, folderId: number | null): Promise<DocumentItem[]>;
+  getDocumentItem(id: number): Promise<DocumentItem | undefined>;
+  getDocumentFileItemsByProject(projectId: number): Promise<DocumentItem[]>;
+  getDocumentFileItemsByFolder(folderId: number): Promise<DocumentItem[]>;
+  createDocumentItem(item: InsertDocumentItem): Promise<DocumentItem>;
+  updateDocumentItem(id: number, item: Partial<InsertDocumentItem>): Promise<DocumentItem | undefined>;
+  deleteDocumentItem(id: number): Promise<boolean>;
 
   // Sharing
   getWorkflowShares(workflowId: number): Promise<WorkflowShare[]>;
@@ -152,6 +178,7 @@ export interface IStorage {
 
 class StorageAggregator extends WorkflowStorage implements IStorage {
   private compositeStorage = new CompositeStorage();
+  private documentsStorage = new DocumentsStorage();
 
   // Composite Methods (Delegated)
   async searchUsers(query: string) { return this.compositeStorage.searchUsers(query); }
@@ -192,6 +219,24 @@ class StorageAggregator extends WorkflowStorage implements IStorage {
   async addStepToComposite(item: InsertCompositeWorkflowItem) { return this.compositeStorage.addStepToComposite(item); }
   async removeStepFromComposite(id: number) { return this.compositeStorage.removeStepFromComposite(id); }
   async deleteCompositeWorkflow(id: number) { return this.compositeStorage.deleteCompositeWorkflow(id); }
+
+  // Document Methods (Delegated)
+  async getDocumentProjectsByUser(userId: string) { return this.documentsStorage.getDocumentProjectsByUser(userId); }
+  async getDocumentProject(id: number) { return this.documentsStorage.getDocumentProject(id); }
+  async createDocumentProject(project: InsertDocumentProject) { return this.documentsStorage.createDocumentProject(project); }
+  async updateDocumentProject(id: number, project: Partial<InsertDocumentProject>) { return this.documentsStorage.updateDocumentProject(id, project); }
+  async deleteDocumentProject(id: number) { return this.documentsStorage.deleteDocumentProject(id); }
+  async getDocumentFoldersByProject(projectId: number) { return this.documentsStorage.getDocumentFoldersByProject(projectId); }
+  async getDocumentFolder(id: number) { return this.documentsStorage.getDocumentFolder(id); }
+  async createDocumentFolder(folder: InsertDocumentFolder) { return this.documentsStorage.createDocumentFolder(folder); }
+  async deleteDocumentFolder(id: number) { return this.documentsStorage.deleteDocumentFolder(id); }
+  async getDocumentItems(projectId: number, folderId: number | null) { return this.documentsStorage.getDocumentItems(projectId, folderId); }
+  async getDocumentItem(id: number) { return this.documentsStorage.getDocumentItem(id); }
+  async getDocumentFileItemsByProject(projectId: number) { return this.documentsStorage.getDocumentFileItemsByProject(projectId); }
+  async getDocumentFileItemsByFolder(folderId: number) { return this.documentsStorage.getDocumentFileItemsByFolder(folderId); }
+  async createDocumentItem(item: InsertDocumentItem) { return this.documentsStorage.createDocumentItem(item); }
+  async updateDocumentItem(id: number, item: Partial<InsertDocumentItem>) { return this.documentsStorage.updateDocumentItem(id, item); }
+  async deleteDocumentItem(id: number) { return this.documentsStorage.deleteDocumentItem(id); }
 }
 
 export const storage = new StorageAggregator();

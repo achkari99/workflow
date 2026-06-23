@@ -339,7 +339,7 @@ export class WorkflowStorage {
             .select()
             .from(dailyTasks)
             .where(eq(dailyTasks.userId, userId))
-            .orderBy(desc(dailyTasks.createdAt));
+            .orderBy(asc(dailyTasks.orderIndex), desc(dailyTasks.createdAt));
     }
 
     async createDailyTask(task: InsertDailyTask): Promise<DailyTask> {
@@ -359,5 +359,17 @@ export class WorkflowStorage {
     async deleteDailyTask(id: number): Promise<boolean> {
         await db.delete(dailyTasks).where(eq(dailyTasks.id, id));
         return true;
+    }
+
+    async reorderDailyTasks(userId: string, orderedIds: number[]): Promise<DailyTask[]> {
+        await db.transaction(async (tx) => {
+            for (const [orderIndex, id] of orderedIds.entries()) {
+                await tx
+                    .update(dailyTasks)
+                    .set({ orderIndex, updatedAt: new Date() })
+                    .where(and(eq(dailyTasks.id, id), eq(dailyTasks.userId, userId)));
+            }
+        });
+        return this.getDailyTasksByUser(userId);
     }
 }

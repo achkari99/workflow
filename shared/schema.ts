@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, integer, timestamp, boolean, date, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, timestamp, boolean, date, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -223,6 +223,7 @@ export const dailyTasks = pgTable("daily_tasks", {
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   priority: text("priority").notNull().default("medium"),
+  orderIndex: integer("order_index").notNull().default(0),
   isCompleted: boolean("is_completed").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -244,6 +245,42 @@ export const notes = pgTable("notes", {
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   content: text("content"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const documentProjects = pgTable("document_projects", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const documentFolders = pgTable("document_folders", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => documentProjects.id, { onDelete: "cascade" }),
+  parentFolderId: integer("parent_folder_id").references(
+    (): AnyPgColumn => documentFolders.id,
+    { onDelete: "cascade" },
+  ),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const documentItems = pgTable("document_items", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => documentProjects.id, { onDelete: "cascade" }),
+  folderId: integer("folder_id").references(() => documentFolders.id, { onDelete: "cascade" }),
+  itemType: text("item_type").notNull(),
+  title: text("title").notNull(),
+  content: text("content"),
+  filePath: text("file_path"),
+  fileName: text("file_name"),
+  mimeType: text("mime_type"),
+  fileSize: integer("file_size"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -311,6 +348,40 @@ export const noteRelations = relations(notes, ({ one }) => ({
   }),
 }));
 
+export const documentProjectRelations = relations(documentProjects, ({ one, many }) => ({
+  user: one(users, {
+    fields: [documentProjects.userId],
+    references: [users.id],
+  }),
+  folders: many(documentFolders),
+  items: many(documentItems),
+}));
+
+export const documentFolderRelations = relations(documentFolders, ({ one, many }) => ({
+  project: one(documentProjects, {
+    fields: [documentFolders.projectId],
+    references: [documentProjects.id],
+  }),
+  parent: one(documentFolders, {
+    fields: [documentFolders.parentFolderId],
+    references: [documentFolders.id],
+    relationName: "documentFolderTree",
+  }),
+  children: many(documentFolders, { relationName: "documentFolderTree" }),
+  items: many(documentItems),
+}));
+
+export const documentItemRelations = relations(documentItems, ({ one }) => ({
+  project: one(documentProjects, {
+    fields: [documentItems.projectId],
+    references: [documentProjects.id],
+  }),
+  folder: one(documentFolders, {
+    fields: [documentItems.folderId],
+    references: [documentFolders.id],
+  }),
+}));
+
 export const insertWorkflowSchema = createInsertSchema(workflows).omit({
   id: true,
   createdAt: true,
@@ -358,6 +429,24 @@ export const insertWorkingHourEntrySchema = createInsertSchema(workingHourEntrie
 });
 
 export const insertNoteSchema = createInsertSchema(notes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDocumentProjectSchema = createInsertSchema(documentProjects).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDocumentFolderSchema = createInsertSchema(documentFolders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDocumentItemSchema = createInsertSchema(documentItems).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -445,6 +534,12 @@ export type InsertWorkingHourEntry = z.infer<typeof insertWorkingHourEntrySchema
 export type WorkingHourEntry = typeof workingHourEntries.$inferSelect;
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Note = typeof notes.$inferSelect;
+export type InsertDocumentProject = z.infer<typeof insertDocumentProjectSchema>;
+export type DocumentProject = typeof documentProjects.$inferSelect;
+export type InsertDocumentFolder = z.infer<typeof insertDocumentFolderSchema>;
+export type DocumentFolder = typeof documentFolders.$inferSelect;
+export type InsertDocumentItem = z.infer<typeof insertDocumentItemSchema>;
+export type DocumentItem = typeof documentItems.$inferSelect;
 export type InsertWorkflowShare = z.infer<typeof insertWorkflowShareSchema>;
 export type WorkflowShare = typeof workflowShares.$inferSelect;
 export type InsertCompositeWorkflow = z.infer<typeof insertCompositeWorkflowSchema>;

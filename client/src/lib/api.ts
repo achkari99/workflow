@@ -1,4 +1,21 @@
-import type { Workflow, InsertWorkflow, Step, IntelDoc, Activity, WorkflowWithSteps, StepWithDetails, WorkflowShare, CompositeWorkflow, CompositeWorkflowWithItems, Note, AudioTrack, DailyTask } from "@shared/schema";
+import type {
+  Workflow,
+  InsertWorkflow,
+  Step,
+  IntelDoc,
+  Activity,
+  WorkflowWithSteps,
+  StepWithDetails,
+  WorkflowShare,
+  CompositeWorkflow,
+  CompositeWorkflowWithItems,
+  Note,
+  AudioTrack,
+  DailyTask,
+  DocumentProject,
+  DocumentFolder,
+  DocumentItem,
+} from "@shared/schema";
 
 export type WorkingHoursRange = "Day" | "Week" | "Month";
 
@@ -7,6 +24,15 @@ export type WorkingHoursPoint = {
   date: string;
   hours: number;
 };
+
+async function getApiError(res: Response, fallback: string) {
+  try {
+    const body = await res.json();
+    return new Error(body.details || body.error || body.message || fallback);
+  } catch {
+    return new Error(fallback);
+  }
+}
 
 export async function getActiveWorkflow(): Promise<WorkflowWithSteps | null> {
   const res = await fetch("/api/workflows/active");
@@ -145,7 +171,7 @@ export async function createDailyTask(payload: { title: string; priority?: strin
 
 export async function updateDailyTask(
   id: number,
-  payload: { title?: string; priority?: string; isCompleted?: boolean }
+  payload: { title?: string; priority?: string; isCompleted?: boolean; orderIndex?: number }
 ): Promise<DailyTask> {
   const res = await fetch(`/api/daily/${id}`, {
     method: "PATCH",
@@ -159,6 +185,138 @@ export async function updateDailyTask(
 export async function deleteDailyTask(id: number): Promise<void> {
   const res = await fetch(`/api/daily/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete daily task");
+}
+
+export async function reorderDailyTasks(orderedIds: number[]): Promise<DailyTask[]> {
+  const res = await fetch("/api/daily/order", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orderedIds }),
+  });
+  if (!res.ok) throw new Error("Failed to reorder daily tasks");
+  return res.json();
+}
+
+export type DocumentItemWithUrl = DocumentItem & { fileUrl?: string | null };
+
+export type DocumentProjectContent = {
+  project: DocumentProject;
+  folders: DocumentFolder[];
+  items: DocumentItemWithUrl[];
+};
+
+export async function getDocumentProjects(): Promise<DocumentProject[]> {
+  const res = await fetch("/api/documents/projects");
+  if (!res.ok) throw new Error("Failed to fetch document projects");
+  return res.json();
+}
+
+export async function createDocumentProject(payload: {
+  name: string;
+  description?: string | null;
+}): Promise<DocumentProject> {
+  const res = await fetch("/api/documents/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to create document project");
+  return res.json();
+}
+
+export async function updateDocumentProject(
+  id: number,
+  payload: { name?: string; description?: string | null },
+): Promise<DocumentProject> {
+  const res = await fetch(`/api/documents/projects/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update document project");
+  return res.json();
+}
+
+export async function deleteDocumentProject(id: number): Promise<void> {
+  const res = await fetch(`/api/documents/projects/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete document project");
+}
+
+export async function getDocumentProjectContent(
+  projectId: number,
+  folderId: number | null,
+): Promise<DocumentProjectContent> {
+  const query = folderId === null ? "" : `?folderId=${folderId}`;
+  const res = await fetch(`/api/documents/projects/${projectId}${query}`);
+  if (!res.ok) throw new Error("Failed to fetch document project");
+  return res.json();
+}
+
+export async function createDocumentFolder(
+  projectId: number,
+  payload: { name: string; parentFolderId?: number | null },
+): Promise<DocumentFolder> {
+  const res = await fetch(`/api/documents/projects/${projectId}/folders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to create folder");
+  return res.json();
+}
+
+export async function deleteDocumentFolder(id: number): Promise<void> {
+  const res = await fetch(`/api/documents/folders/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await getApiError(res, "Failed to delete folder");
+}
+
+export async function createDocumentNote(
+  projectId: number,
+  payload: { folderId?: number | null; title: string; content?: string | null },
+): Promise<DocumentItem> {
+  const res = await fetch(`/api/documents/projects/${projectId}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to create document note");
+  return res.json();
+}
+
+export async function updateDocumentNote(
+  id: number,
+  payload: { title?: string; content?: string | null },
+): Promise<DocumentItem> {
+  const res = await fetch(`/api/documents/items/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update document note");
+  return res.json();
+}
+
+export async function uploadDocumentFile(
+  projectId: number,
+  payload: { folderId?: number | null; title?: string; file: File },
+): Promise<DocumentItemWithUrl> {
+  const body = new FormData();
+  body.append("file", payload.file);
+  if (payload.title) body.append("title", payload.title);
+  if (payload.folderId !== null && payload.folderId !== undefined) {
+    body.append("folderId", String(payload.folderId));
+  }
+  const res = await fetch(`/api/documents/projects/${projectId}/files`, {
+    method: "POST",
+    body,
+  });
+  if (!res.ok) throw await getApiError(res, "Failed to upload document file");
+  return res.json();
+}
+
+export async function deleteDocumentItem(id: number): Promise<void> {
+  const res = await fetch(`/api/documents/items/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete document item");
 }
 
 export async function updateWorkflow(id: number, data: Partial<InsertWorkflow>): Promise<Workflow> {

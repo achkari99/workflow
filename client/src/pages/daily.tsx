@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDailyTask, deleteDailyTask, getDailyTasks, updateDailyTask } from "@/lib/api";
+import { createDailyTask, deleteDailyTask, getDailyTasks, reorderDailyTasks, updateDailyTask } from "@/lib/api";
 import type { DailyTask } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { AlertTriangle, Check, ChevronLeft, ListChecks, Loader2, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronLeft, ListChecks, Loader2, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 type DailyTaskView = DailyTask & {
@@ -44,12 +44,16 @@ export default function DailyPage() {
   const [editTitle, setEditTitle] = useState("");
   const [createError, setCreateError] = useState("");
   const [deleteError, setDeleteError] = useState("");
+  const [reorderError, setReorderError] = useState("");
 
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["daily-tasks"],
     queryFn: getDailyTasks,
   });
-  const orderedTasks = [...tasks].sort((a, b) => Number(a.isCompleted) - Number(b.isCompleted));
+  const orderedTasks = [...tasks].sort((a, b) => {
+    const completionOrder = Number(a.isCompleted) - Number(b.isCompleted);
+    return completionOrder || a.orderIndex - b.orderIndex;
+  });
 
   const createMutation = useMutation({
     mutationFn: (payload: { title: string; priority: DailyTaskPriority }) => createDailyTask(payload),
@@ -57,9 +61,14 @@ export default function DailyPage() {
       await queryClient.cancelQueries({ queryKey: ["daily-tasks"] });
       setCreateError("");
       setDeleteError("");
+      setReorderError("");
       const previousTasks = queryClient.getQueryData<DailyTaskView[]>(["daily-tasks"]);
       const tempId = -Date.now();
       const now = new Date();
+      const nextOrderIndex =
+        previousTasks && previousTasks.length > 0
+          ? Math.min(...previousTasks.map((task) => task.orderIndex)) - 1
+          : 0;
 
       queryClient.setQueryData<DailyTaskView[]>(["daily-tasks"], (currentTasks = []) => [
         {
@@ -68,6 +77,7 @@ export default function DailyPage() {
           userId: "optimistic",
           title: payload.title,
           priority: payload.priority,
+          orderIndex: nextOrderIndex,
           isCompleted: false,
           createdAt: now,
           updatedAt: now,
@@ -152,6 +162,51 @@ export default function DailyPage() {
     },
   });
 
+  const reorderMutation = useMutation({
+    mutationFn: (orderedIds: number[]) => reorderDailyTasks(orderedIds),
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: ["daily-tasks"] });
+      setReorderError("");
+      const previousTasks = queryClient.getQueryData<DailyTaskView[]>(["daily-tasks"]);
+      const orderById = new Map(orderedIds.map((id, index) => [id, index]));
+      queryClient.setQueryData<DailyTaskView[]>(["daily-tasks"], (currentTasks = []) =>
+        currentTasks.map((task) => ({
+          ...task,
+          orderIndex: orderById.get(task.id) ?? task.orderIndex,
+        }))
+      );
+      return { previousTasks };
+    },
+    onSuccess: (reorderedTasks) => {
+      queryClient.setQueryData(["daily-tasks"], reorderedTasks);
+    },
+    onError: (_error, _orderedIds, context) => {
+      setReorderError("Saving the new task order was unsuccessful. Your previous order was restored.");
+      if (context?.previousTasks) {
+        queryClient.setQueryData(["daily-tasks"], context.previousTasks);
+      }
+    },
+  });
+
+  const moveTask = (taskId: number, direction: -1 | 1) => {
+    const currentIndex = orderedTasks.findIndex((task) => task.id === taskId);
+    const targetIndex = currentIndex + direction;
+    if (
+      currentIndex < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= orderedTasks.length ||
+      orderedTasks[targetIndex].isCompleted !== orderedTasks[currentIndex].isCompleted
+    ) {
+      return;
+    }
+    const nextOrder = [...orderedTasks];
+    [nextOrder[currentIndex], nextOrder[targetIndex]] = [
+      nextOrder[targetIndex],
+      nextOrder[currentIndex],
+    ];
+    reorderMutation.mutate(nextOrder.map((task) => task.id));
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="h-14 border-b border-white/5 bg-black/40 flex items-center justify-between px-4">
@@ -179,7 +234,7 @@ export default function DailyPage() {
         </div>
 
         <AnimatePresence>
-          {(createError || deleteError) && (
+          {(createError || deleteError || reorderError) && (
             <motion.div
               initial={{ opacity: 0, y: -12, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -193,15 +248,16 @@ export default function DailyPage() {
                 </div>
                 <div className="flex-1">
                   <p className="font-mono text-xs uppercase tracking-[0.22em] text-red-200">
-                    {deleteError ? "Task Not Deleted" : "Task Not Added"}
+                    {reorderError ? "Order Not Saved" : deleteError ? "Task Not Deleted" : "Task Not Added"}
                   </p>
-                  <p className="mt-1 text-sm text-red-100/80">{deleteError || createError}</p>
+                  <p className="mt-1 text-sm text-red-100/80">{reorderError || deleteError || createError}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     setCreateError("");
                     setDeleteError("");
+                    setReorderError("");
                   }}
                   className="text-red-100/45 transition hover:text-red-100"
                   aria-label="Dismiss error"
@@ -272,8 +328,12 @@ export default function DailyPage() {
         ) : tasks.length > 0 ? (
           <div className="grid gap-3">
             <AnimatePresence initial={false}>
-              {orderedTasks.map((task) => {
+              {orderedTasks.map((task, taskIndex) => {
                 const isEditing = editingId === task.id;
+                const previousTask = orderedTasks[taskIndex - 1];
+                const nextTask = orderedTasks[taskIndex + 1];
+                const canMoveUp = Boolean(previousTask && previousTask.isCompleted === task.isCompleted);
+                const canMoveDown = Boolean(nextTask && nextTask.isCompleted === task.isCompleted);
                 return (
                   <motion.div
                     key={(task as DailyTaskView).optimisticKey ?? task.id}
@@ -353,6 +413,28 @@ export default function DailyPage() {
                         <span className="text-[10px] font-mono uppercase tracking-widest text-white/30">
                           {formatTaskDate(task.createdAt)}
                         </span>
+                      </div>
+                      <div className="flex shrink-0 flex-col">
+                        <button
+                          type="button"
+                          onClick={() => moveTask(task.id, -1)}
+                          disabled={!canMoveUp || reorderMutation.isPending || createMutation.isPending || task.id < 0}
+                          className="p-1 text-white/30 transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-20"
+                          aria-label={`Move ${task.title} up`}
+                          title="Move up"
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveTask(task.id, 1)}
+                          disabled={!canMoveDown || reorderMutation.isPending || createMutation.isPending || task.id < 0}
+                          className="p-1 text-white/30 transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-20"
+                          aria-label={`Move ${task.title} down`}
+                          title="Move down"
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                       <Button
                         size="sm"

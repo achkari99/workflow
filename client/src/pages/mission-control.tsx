@@ -5,7 +5,7 @@ import { AmbientBackground } from "@/components/ui/ambient-background";
 import bgTexture from "@assets/generated_images/subtle_dark_digital_noise_texture_with_faint_grid_overlay.png";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getActiveWorkflow, getWorkflows, advanceWorkflow } from "@/lib/api";
-import { Loader2, Plus, List, Layers, Users, LogIn, LogOut, User, StickyNote, ListChecks } from "lucide-react";
+import { Loader2, Plus, List, Layers, Users, LogIn, LogOut, User, StickyNote, ListChecks, HardDrive } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -137,6 +137,16 @@ export default function MissionControl() {
               <Button
                 variant="ghost"
                 size="sm"
+                onClick={() => navigate("/documents")}
+                className="text-white/50 hover:text-white hover:bg-white/5"
+                data-testid="button-documents"
+              >
+                <HardDrive className="w-4 h-4 mr-2" />
+                Documents
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => navigate("/missions")}
                 className="text-white/50 hover:text-white hover:bg-white/5"
                 data-testid="button-all-missions"
@@ -226,6 +236,15 @@ export default function MissionControl() {
               >
                 <ListChecks className="w-4 h-4 mr-2" />
                 Daily
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/documents")}
+                className="justify-start text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <HardDrive className="w-4 h-4 mr-2" />
+                Documents
               </Button>
               <Button
                 variant="ghost"

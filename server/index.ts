@@ -6,6 +6,7 @@ import { setupAuth } from "./auth";
 import { setupRealtime } from "./realtime";
 import { pool } from "./db";
 import { startProductionKeepAlive } from "./keepAlive";
+import { ensureStorageBuckets } from "./supabase";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -60,6 +61,7 @@ app.use((req, res, next) => {
     log(`profile image column update skipped: ${(error as Error).message}`);
   }
 
+  await ensureStorageBuckets();
   await setupAuth(app);
   await registerRoutes(app);
   setupRealtime(httpServer);

@@ -28,7 +28,15 @@ export function registerDailyRoutes(app: Express) {
       if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
       }
-      const validation = insertDailyTaskSchema.safeParse({ ...req.body, userId });
+      const existingTasks = await storage.getDailyTasksByUser(userId);
+      const nextOrderIndex = existingTasks.length > 0
+        ? Math.min(...existingTasks.map((task) => task.orderIndex)) - 1
+        : 0;
+      const validation = insertDailyTaskSchema.safeParse({
+        ...req.body,
+        userId,
+        orderIndex: nextOrderIndex,
+      });
       if (!validation.success) {
         return res.status(400).json({ error: fromError(validation.error).toString() });
       }
@@ -36,6 +44,31 @@ export function registerDailyRoutes(app: Express) {
       res.status(201).json(task);
     } catch (error) {
       res.status(500).json({ error: "Failed to create daily task" });
+    }
+  });
+
+  app.put("/api/daily/order", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const orderedIds: number[] = Array.isArray(req.body.orderedIds)
+        ? req.body.orderedIds.filter((id: unknown): id is number => Number.isInteger(id))
+        : [];
+      const existing = await storage.getDailyTasksByUser(userId);
+      const existingIds = new Set(existing.map((task) => task.id));
+      if (
+        orderedIds.length !== existing.length ||
+        orderedIds.some((id) => !existingIds.has(id)) ||
+        new Set(orderedIds).size !== orderedIds.length
+      ) {
+        return res.status(400).json({ error: "Invalid task order" });
+      }
+      const reordered = await storage.reorderDailyTasks(userId, orderedIds);
+      res.json(reordered);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reorder daily tasks" });
     }
   });
 
